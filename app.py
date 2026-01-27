@@ -153,7 +153,7 @@ mes_nome = c_m.selectbox("Mês", meses, index=hoje.month - 1)
 ano_ref = c_a.number_input("Ano", value=hoje.year, step=1)
 mes_num = meses.index(mes_nome) + 1
 
-# --- SEGURANÇA DE FLUXO E PROCESSAMENTO DE DADOS ---
+# --- PROCESSAMENTO DE DADOS ---
 df_geral = st.session_state.dados.copy()
 colunas_padrao = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status']
 df_mes = pd.DataFrame(columns=colunas_padrao)
@@ -167,10 +167,8 @@ if not df_geral.empty:
     total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
     balanco = total_in - total_out_pagas
     
-    # Filtro do Mês Selecionado
     df_mes = df_geral[(df_geral['data'].dt.month == mes_num) & (df_geral['data'].dt.year == ano_ref)]
     
-    # CONTROLE DE ATRASADOS: Pendências de meses ANTERIORES ao selecionado
     data_inicio_mes_selecionado = pd.Timestamp(date(ano_ref, mes_num, 1))
     df_atrasados_passado = df_geral[(df_geral['status'] == 'Pendente') & (df_geral['data'] < data_inicio_mes_selecionado) & (df_geral['tipo'] == 'Saída')]
 
@@ -178,7 +176,7 @@ if not df_geral.empty:
 aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
 
 with aba_resumo:
-    # --- IMPLEMENTAÇÃO: CONTROLE DE ATRASADOS ---
+    # Controle de Atrasados (Passado)
     if not df_atrasados_passado.empty:
         total_atrasado = df_atrasados_passado['valor'].sum()
         with st.expander(f"⚠️ CONTAS PENDENTES DE MESES ANTERIORES: R$ {total_atrasado:,.2f}", expanded=True):
@@ -200,15 +198,7 @@ with aba_resumo:
         c2.metric("Gastos (Pagos)", f"R$ {saidas_pagas:,.2f}")
         c3.metric("Saldo Real", f"R$ {saldo_mes:,.2f}")
 
-        # --- IMPLEMENTAÇÃO: CALENDÁRIO DE PAGAMENTOS ---
-        df_cal = df_mes[df_mes['tipo'] == 'Saída'].copy()
-        if not df_cal.empty:
-            df_cal['dia'] = df_cal['data'].dt.day
-            gastos_dia = df_cal.groupby('dia')['valor'].sum().reset_index()
-            fig_cal = px.bar(gastos_dia, x='dia', y='valor', title="Calendário de Saídas (Dia do Mês)",
-                             labels={'dia': 'Dia', 'valor': 'Total R$'}, color_discrete_sequence=['#3B82F6'])
-            fig_cal.update_layout(height=220, margin=dict(t=30, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig_cal, use_container_width=True)
+        # GRÁFICO REMOVIDO DA ABA MÊS
 
         if st.session_state.metas:
             with st.expander("🎯 Status das Metas"):
@@ -226,7 +216,7 @@ with aba_resumo:
             s_text = row.get('status', 'Pago')
             s_color, s_bg = ("#10B981", "#D1FAE5") if s_text == "Pago" else ("#F59E0B", "#FEF3C7")
             
-            # --- IMPLEMENTAÇÃO: ACOMPANHAMENTO POR VENCIMENTO ---
+            # Acompanhamento por Vencimento
             txt_venc = ""
             if s_text == "Pendente" and row['tipo'] == "Saída":
                 dias_diff = (row['data'].date() - hoje).days
@@ -310,11 +300,7 @@ with aba_metas:
 
 with aba_reserva:
     st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.8;font-size:14px;">PATRIMÔNIO REAL</p><h2>R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
-    
-    if not df_geral.empty:
-        df_geral['MesAno'] = df_geral['data'].dt.to_period('M').astype(str)
-        mensal = df_geral.groupby(['MesAno', 'tipo'])['valor'].sum().unstack(fill_value=0)
-        st.plotly_chart(px.line(mensal, title="Evolução Financeira"), use_container_width=True)
+    # GRÁFICO REMOVIDO DA ABA CAIXA (RESERVA)
 
 with aba_sonhos:
     v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
