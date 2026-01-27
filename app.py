@@ -265,6 +265,7 @@ with aba_novo:
         else: st.caption("Sem fixos configurados.")
 
 with aba_metas:
+    st.info("💡 Exemplo: Defina R$ 1.000,00 para '🛒 Mercado'.")
     for cat in CATEGORIAS:
         if cat != "💰 Salário":
             atual_m = float(st.session_state.metas.get(cat, 0))
@@ -282,6 +283,7 @@ with aba_reserva:
         st.plotly_chart(px.line(mensal, title="Evolução Financeira"), use_container_width=True)
 
 with aba_sonhos:
+    st.info("💡 Exemplo: Comprar um carro, uma viagem...")
     v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
     if v_sonho > 0:
         try:
