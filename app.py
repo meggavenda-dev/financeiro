@@ -17,38 +17,19 @@ except Exception as e:
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Minha Casa", page_icon="🏡", layout="centered")
 
-# --- INJEÇÃO PARA FORÇAR ÍCONE NO ANDROID E ESCONDER CÓDIGO ---
-st.components.v1.html(
-    """
-    <script>
-    const iconUrl = "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/1f3e1.png";
-    
-    // Função para trocar o ícone em todos os lugares possíveis
-    function changeIcon(url) {
-        const links = document.querySelectorAll("link[rel*='icon']");
-        links.forEach(link => link.href = url);
-        
-        if (links.length === 0) {
-            const newLink = document.createElement('link');
-            newLink.rel = 'icon';
-            newLink.href = url;
-            document.head.appendChild(newLink);
-        }
-        
-        // Para iOS/Android PWA
-        const appleIcon = document.createElement('link');
-        appleIcon.rel = 'apple-touch-icon';
-        appleIcon.href = url;
-        document.head.appendChild(appleIcon);
-    }
-    
-    changeIcon(iconUrl);
-    // Tenta novamente após 2 segundos caso o Streamlit sobrescreva
-    setTimeout(() => changeIcon(iconUrl), 2000);
-    </script>
-    """,
-    height=0,
-)
+# Injeção de Meta Tags para Android PWA
+st.markdown(f"""
+    <style>
+        /* Esconde o container do script para não aparecer espaço branco */
+        iframe[title="st.components.v1.html"] {{
+            display: none;
+        }}
+    </style>
+    <link rel="shortcut icon" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
+""", unsafe_allow_html=True)
+
 # CSS PREMIUM ATUALIZADO
 st.markdown("""
     <style>
