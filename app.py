@@ -3,10 +3,9 @@ import pandas as pd
 from datetime import date
 import plotly.express as px
 from supabase import create_client, Client
+import os
 
 # --- CONFIGURAÇÃO SUPABASE ---
-# Pegue essas credenciais no painel do Supabase (Settings -> API)
-# No Streamlit Cloud, configure em 'Settings' -> 'Secrets'
 try:
     url: str = st.secrets["SUPABASE_URL"]
     key: str = st.secrets["SUPABASE_KEY"]
@@ -24,7 +23,6 @@ st.markdown("""
     .stApp { background-color: #F7F9FC; }
     h1, h2, h3 { color: #2C3E50; font-family: 'Segoe UI', sans-serif; text-align: center; }
     
-    /* ABAS RESPONSIVAS E CENTRALIZADAS */
     .stTabs [data-baseweb="tab-list"] {
         display: flex;
         justify-content: center; 
@@ -49,7 +47,6 @@ st.markdown("""
         font-weight: bold;
     }
 
-    /* CARDS E BOTÕES */
     [data-testid="stMetric"] {
         background-color: #FFFFFF; border-radius: 20px; padding: 10px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #EDF2F7;
@@ -67,11 +64,21 @@ st.markdown("""
         color: white; padding: 20px; border-radius: 20px; text-align: center; margin-bottom: 20px;
     }
 
-    /* ESCONDER INTERFACE STREAMLIT */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .block-container { padding-top: 1rem !important; }
+    
+    /* Estilo específico para o botão de deletar pequeno */
+    .btn-del > div > button {
+        background-color: transparent !important;
+        color: #E53E3E !important;
+        border: 1px solid #FED7D7 !important;
+        padding: 2px 10px !important;
+        font-size: 10px !important;
+        height: auto !important;
+        width: auto !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -153,9 +160,31 @@ with aba_resumo:
                         st.progress(min(atual/lim, 1.0))
 
         st.markdown(f"### Histórico")
+        # Mostrar os registros com opção de excluir
         for idx, row in df_mes.sort_values(by='data', ascending=False).iterrows():
             cor = "#38A169" if row['tipo'] == "Entrada" else "#E53E3E"
-            st.markdown(f'<div class="transaction-card"><div><strong>{row["descricao"]}</strong><br><small>{row["categoria"]}</small></div><div style="color: {cor}; font-weight: bold;">R$ {row["valor"]:,.2f}</div></div>', unsafe_allow_html=True)
+            
+            # Container do card
+            with st.container():
+                col_info, col_del = st.columns([4, 1])
+                with col_info:
+                    st.markdown(f"""
+                    <div style="margin-bottom: -15px;">
+                        <strong>{row['descricao']}</strong><br>
+                        <small>{row['categoria']} | {row['data'].strftime('%d/%m')}</small><br>
+                        <span style="color: {cor}; font-weight: bold;">R$ {row['valor']:,.2f}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_del:
+                    # Botão de exclusão
+                    st.markdown('<div class="btn-del">', unsafe_allow_html=True)
+                    if st.button("🗑️", key=f"del_{row['id']}"):
+                        supabase.table("transacoes").delete().eq("id", row['id']).execute()
+                        st.session_state.dados = buscar_dados()
+                        st.toast(f"Item '{row['descricao']}' excluído!")
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown("---")
     else:
         st.info("Toque em 'Novo' para começar!")
 
