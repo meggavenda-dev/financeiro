@@ -2,108 +2,87 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import plotly.express as px
-import os
 
-# Configuração da página
-st.set_page_config(page_title="MyFinance", page_icon="💳", layout="centered")
+# Configuração Mobile-First
+st.set_page_config(page_title="Finanças Casa", page_icon="🏠", layout="centered")
 
-# CSS para melhorar a aparência no Mobile
+# CSS para esconder menus desnecessários e ajustar fontes
 st.markdown("""
     <style>
-    .main { background-color: #f8f9fa; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    div[data-testid="stExpander"] { border: none !important; box-shadow: none !important; }
+    [data-testid="stHeader"] {background: rgba(0,0,0,0);}
+    .stMetric { background-color: #ffffff; border-radius: 10px; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
     </style>
     """, unsafe_allow_html=True)
 
-# --- PERSISTÊNCIA DE DADOS ---
-DB_FILE = "finance_data.csv"
-
-def carregar_dados():
-    if os.path.exists(DB_FILE):
-        return pd.read_csv(DB_FILE, parse_dates=['Data'])
-    return pd.DataFrame(columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
-
-def salvar_dados(df):
-    df.to_csv(DB_FILE, index=False)
-
 if 'dados' not in st.session_state:
-    st.session_state.dados = carregar_dados()
+    st.session_state.dados = pd.DataFrame(columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
 
-# --- HEADER ---
-st.title("💳 MyFinance")
-st.caption("Controle financeiro simples e rápido")
+# --- LÓGICA DE DATAS ---
+hoje = date.today()
+meses_nomes = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
-# --- RESUMO (CARDS) ---
+st.title("🏠 Finanças da Casa")
+
+# Seletor de Mês no topo (Fácil de tocar no celular)
+col_m, col_a = st.columns([2, 1])
+mes_sel = col_m.selectbox("Mês de Referência", meses_nomes, index=hoje.month - 1)
+ano_sel = col_a.number_input("Ano", value=hoje.year)
+
+# --- FILTRAGEM ---
 df = st.session_state.dados
-entradas = df[df['Tipo'] == 'Entrada']['Valor'].sum()
-saidas = df[df['Tipo'] == 'Saída']['Valor'].sum()
-saldo = entradas - saidas
+df['Data'] = pd.to_datetime(df['Data'])
+df_mes = df[(df['Data'].dt.month == meses_nomes.index(mes_sel) + 1) & (df['Data'].dt.year == ano_sel)]
 
-c1, c2 = st.columns(2)
-c1.metric("Ganhos", f"R$ {entradas:,.2f}")
-c2.metric("Gastos", f"R$ {saidas:,.2f}", delta=f"-{saidas:,.2f}", delta_color="inverse")
-st.metric("Saldo Atual", f"R$ {saldo:,.2f}")
+# --- RESUMO VISUAL ---
+if not df_mes.empty:
+    entradas = df_mes[df_mes['Tipo'] == 'Entrada']['Valor'].sum()
+    saidas = df_mes[df_mes['Tipo'] == 'Saída']['Valor'].sum()
+    saldo = entradas - saidas
 
-# --- ENTRADA DE DADOS ---
-with st.expander("➕ Novo Lançamento", expanded=False):
-    with st.form("novo_registro", clear_on_submit=True):
-        col_data, col_valor = st.columns(2)
-        data = col_data.date_input("Data", date.today())
-        valor = col_valor.number_input("Valor (R$)", min_value=0.0, step=0.50)
-        
-        desc = st.text_input("Descrição", placeholder="Ex: Mercado, Freelance...")
-        
-        col_tipo, col_cat = st.columns(2)
-        tipo = col_tipo.selectbox("Fluxo", ["Saída", "Entrada"])
-        
-        # Categorias dinâmicas baseadas no tipo
-        if tipo == "Saída":
-            cat = col_cat.selectbox("Categoria", ["🏠 Casa", "🍔 Alimentação", "🚗 Transporte", "🎭 Lazer", "💡 Contas", "🛠 Outros"])
-        else:
-            cat = col_cat.selectbox("Categoria", ["💰 Salário", "📈 Investimento", "🎁 Presente", "🛠 Outros"])
-
-        if st.form_submit_button("✅ Confirmar Lançamento", use_container_width=True):
-            if desc and valor > 0:
-                novo_item = pd.DataFrame([[pd.to_datetime(data), desc, valor, tipo, cat]], 
-                                        columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
-                st.session_state.dados = pd.concat([st.session_state.dados, novo_item], ignore_index=True)
-                salvar_dados(st.session_state.dados)
-                st.toast("Lançado com sucesso!", icon="💰")
-                st.rerun()
-            else:
-                st.error("Preencha a descrição e o valor.")
-
-# --- VISUALIZAÇÃO ---
-if not df.empty:
-    st.divider()
+    # Cards de Resumo
+    c1, c2 = st.columns(2)
+    c1.metric("Recebido", f"R$ {entradas:,.2f}")
+    c2.metric("Gasto", f"R$ {saidas:,.2f}", delta=f"R$ {saldo:,.2f}", delta_color="normal")
     
-    # Gráfico de Gastos por Categoria
-    df_gastos = df[df['Tipo'] == 'Saída']
-    if not df_gastos.empty:
-        fig = px.pie(df_gastos, values='Valor', names='Categoria', hole=0.5,
-                     color_discrete_sequence=px.colors.sequential.RdBu,
-                     title="Distribuição de Gastos")
-        fig.update_layout(showlegend=False, margin=dict(t=30, b=0, l=0, r=0))
-        st.plotly_chart(fig, use_container_width=True)
-
-    # Lista de Histórico Estilizada
-    st.subheader("📋 Últimas Atividades")
-    
-    # Ordenar por data mais recente
-    df_display = df.sort_values(by='Data', ascending=False).head(10)
-    
-    for i, row in df_display.iterrows():
-        cor = "🟢" if row['Tipo'] == "Entrada" else "🔴"
-        st.markdown(f"""
-        **{cor} {row['Descrição']}** <small>{row['Categoria']} • {row['Data'].strftime('%d/%m/%Y')}</small>  
-        **R$ {row['Valor']:,.2f}**
-        ---
-        """, unsafe_allow_html=True)
-
-    if st.button("🗑 Limpar Todo Histórico"):
-        st.session_state.dados = pd.DataFrame(columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
-        salvar_dados(st.session_state.dados)
-        st.rerun()
+    # Barra de Saúde Financeira
+    if entradas > 0:
+        progresso = min(saidas / entradas, 1.0)
+        st.write(f"**Uso da Renda: {progresso*100:.1f}%**")
+        st.progress(progresso)
 else:
-    st.info("Toque no botão '+' acima para começar.")
+    st.warning(f"Sem registros para {mes_sel}/{ano_sel}")
+
+# --- FORMULÁRIO (EXPANDER) ---
+with st.expander("➕ Lançar Gasto/Renda"):
+    with st.form("add_lançamento", clear_on_submit=True):
+        valor = st.number_input("Valor R$", min_value=0.0, step=10.0)
+        desc = st.text_input("O que é?")
+        tipo = st.radio("Tipo", ["Saída", "Entrada"], horizontal=True)
+        cat = st.selectbox("Categoria", ["🛒 Mercado", "🔌 Contas Fixas", "🚗 Transporte", "🍕 Lazer", "💰 Salário", "🛠 Outros"])
+        data_lan = st.date_input("Data", date.today())
+        
+        if st.form_submit_button("Salvar Registro", use_container_width=True):
+            novo = pd.DataFrame([[pd.to_datetime(data_lan), desc, valor, tipo, cat]], 
+                               columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
+            st.session_state.dados = pd.concat([st.session_state.dados, novo], ignore_index=True)
+            st.rerun()
+
+# --- GRÁFICO ---
+if not df_mes.empty and saidas > 0:
+    st.subheader("Para onde foi o dinheiro?")
+    fig = px.pie(df_mes[df_mes['Tipo'] == 'Saída'], values='Valor', names='Categoria', hole=0.4)
+    fig.update_layout(margin=dict(l=20, r=20, t=20, b=20), showlegend=True)
+    st.plotly_chart(fig, use_container_width=True)
+
+# --- HISTÓRICO EM CARDS (MELHOR QUE TABELA NO CELULAR) ---
+st.subheader("📋 Movimentações")
+if not df_mes.empty:
+    for i, row in df_mes.sort_values("Data", ascending=False).iterrows():
+        cor = "#2ecc71" if row['Tipo'] == 'Entrada' else "#e74c3c"
+        with st.container():
+            st.markdown(f"""
+            <div style="border-left: 5px solid {cor}; padding: 10px; margin-bottom: 10px; background: #fff; border-radius: 5px;">
+                <small>{row['Data'].strftime('%d/%m')}</small> | <b>{row['Descrição']}</b><br>
+                <span style="color: {cor}; font-weight: bold;">R$ {row['Valor']:,.2f}</span> | <small>{row['Categoria']}</small>
+            </div>
+            """, unsafe_allow_html=True)
