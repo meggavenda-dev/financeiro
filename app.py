@@ -147,10 +147,10 @@ def gerar_pdf(df, nome_mes):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(200, 10, f"Relatório Financeiro - {nome_mes}", ln=True, align='C')
+    pdf.cell(200, 10, f"Relatorio Financeiro - {nome_mes}", ln=True, align='C')
     pdf.ln(10)
     pdf.set_font("Helvetica", "B", 10)
-    cols = ["Data", "Descrição", "Valor", "Tipo", "Status"]
+    cols = ["Data", "Descricao", "Valor", "Tipo", "Status"]
     for col in cols: pdf.cell(38, 10, col, 1)
     pdf.ln()
     pdf.set_font("Helvetica", "", 9)
@@ -161,7 +161,8 @@ def gerar_pdf(df, nome_mes):
         pdf.cell(38, 10, row['tipo'], 1)
         pdf.cell(38, 10, row['status'], 1)
         pdf.ln()
-    return pdf.output()
+    # CORREÇÃO AQUI: Retornar bytes explicitamente
+    return bytes(pdf.output())
 
 # Sincronização Inicial
 if 'dados' not in st.session_state: st.session_state.dados = buscar_dados()
