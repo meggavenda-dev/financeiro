@@ -17,6 +17,19 @@ except Exception as e:
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Minha Casa", page_icon="🏡", layout="centered")
 
+# Injeção de Meta Tags para Android PWA
+st.markdown(f"""
+    <style>
+        /* Esconde o container do script para não aparecer espaço branco */
+        iframe[title="st.components.v1.html"] {{
+            display: none;
+        }}
+    </style>
+    <link rel="shortcut icon" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
+""", unsafe_allow_html=True)
+
 # CSS PREMIUM ATUALIZADO
 st.markdown("""
     <style>
@@ -25,7 +38,6 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     .stApp { background-color: #F8FAFC; }
 
-    /* Estilização do Título Centralizado */
     .header-container {
         text-align: center;
         padding-bottom: 20px;
@@ -44,7 +56,6 @@ st.markdown("""
         font-weight: 400;
     }
 
-    /* ABAS CENTRALIZADAS */
     .stTabs [data-baseweb="tab-list"] {
         display: flex; justify-content: center; gap: 4px; width: 100%;
         background-color: #E2E8F0; border-radius: 16px; padding: 4px;
@@ -59,13 +70,11 @@ st.markdown("""
         box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
     }
 
-    /* CARDS DE MÉTRICAS */
     [data-testid="stMetric"] {
         background-color: #FFFFFF; border-radius: 22px; padding: 15px;
         box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05); border: 1px solid #F1F5F9;
     }
 
-    /* BOTÕES */
     .stButton>button {
         width: 100%; border-radius: 16px; background: #3B82F6;
         color: white; border: none; padding: 12px; font-weight: 700;
@@ -73,7 +82,6 @@ st.markdown("""
     }
     .stButton>button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
 
-    /* TRANSACTION CARDS */
     .transaction-card {
         background-color: #FFFFFF; padding: 16px; border-radius: 20px;
         margin-bottom: 0px; display: flex; justify-content: space-between;
@@ -86,14 +94,12 @@ st.markdown("""
         margin-right: 12px;
     }
 
-    /* RESERVA CARD */
     .reserva-card {
         background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
         color: white; padding: 25px; border-radius: 24px; text-align: center;
         box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); margin-bottom: 25px;
     }
 
-    /* MELHORIA NAS METAS */
     .meta-container {
         background-color: #F1F5F9;
         padding: 12px;
@@ -112,7 +118,7 @@ st.markdown("""
     }
 
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-    .block-container { padding-top: 1.5rem !important; }
+    .block-container { padding-top: 2rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -132,7 +138,6 @@ def buscar_fixos():
     res = supabase.table("fixos").select("*").execute()
     return pd.DataFrame(res.data)
 
-# Sincronização Inicial
 if 'dados' not in st.session_state:
     st.session_state.dados = buscar_dados()
 if 'metas' not in st.session_state:
@@ -143,7 +148,6 @@ if 'fixos' not in st.session_state:
 CATEGORIAS = ["🛒 Mercado", "🏠 Moradia", "🚗 Transporte", "🍕 Lazer", "💡 Contas", "💰 Salário", "✨ Outros"]
 meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
-# --- HEADER CENTRALIZADO COM SLOGAN ---
 st.markdown("""
     <div class="header-container">
         <div class="main-title">🏡 Financeiro</div>
@@ -157,7 +161,6 @@ mes_nome = c_m.selectbox("Mês", meses, index=hoje.month - 1)
 ano_ref = c_a.number_input("Ano", value=hoje.year, step=1)
 mes_num = meses.index(mes_nome) + 1
 
-# --- PROCESSAMENTO ---
 df_geral = st.session_state.dados.copy()
 if not df_geral.empty:
     df_mes = df_geral[(df_geral['data'].dt.month == mes_num) & (df_geral['data'].dt.year == ano_ref)]
@@ -168,16 +171,13 @@ else:
     df_mes = pd.DataFrame()
     df_ant = pd.DataFrame()
 
-# ABAS
 aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
 
-# --- ABA RESUMO ---
 with aba_resumo:
     if not df_mes.empty:
         entradas = df_mes[df_mes['tipo'] == 'Entrada']['valor'].sum()
         saidas = df_mes[df_mes['tipo'] == 'Saída']['valor'].sum()
         saldo_mes = entradas - saidas
-        
         c1, c2, c3 = st.columns(3)
         c1.metric("Ganhos", f"R$ {entradas:,.2f}")
         c2.metric("Gastos", f"R$ {saidas:,.2f}")
@@ -190,7 +190,6 @@ with aba_resumo:
             fig_comp.update_layout(height=230, showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=10, b=0, l=0, r=0))
             st.plotly_chart(fig_comp, use_container_width=True)
 
-        # MELHORIA NA APARÊNCIA DAS METAS
         if st.session_state.metas:
             with st.expander("🎯 Status das Metas"):
                 gastos_cat = df_mes[df_mes['tipo'] == 'Saída'].groupby('categoria')['valor'].sum()
@@ -198,7 +197,6 @@ with aba_resumo:
                     if lim > 0:
                         atual = gastos_cat.get(cat, 0)
                         porcentagem = min(atual/lim, 1.0)
-                        cor_meta = "#3B82F6" if porcentagem < 0.8 else "#EF4444"
                         st.markdown(f"""
                             <div class="meta-container">
                                 <div style="display: flex; justify-content: space-between; font-size: 14px;">
@@ -237,7 +235,6 @@ with aba_resumo:
     else:
         st.info("Toque em 'Novo' para começar!")
 
-# --- ABA NOVO ---
 with aba_novo:
     aba_unit, aba_fixo = st.tabs(["Lançamento Único", "🗓️ Fixos"])
     with aba_unit:
@@ -252,10 +249,7 @@ with aba_novo:
                 supabase.table("transacoes").insert({"data": str(dt), "descricao": d, "valor": v, "tipo": t, "categoria": c}).execute()
                 if fixo_check:
                     supabase.table("fixos").insert({"descricao": d, "valor": v, "categoria": c}).execute()
-
-                # MENSAGEM DE SUCESSO SOLICITADA
                 st.success(f"{t} cadastrada com sucesso!")
-                
                 st.session_state.dados = buscar_dados()
                 st.session_state.fixos = buscar_fixos()
                 st.rerun()
@@ -273,7 +267,6 @@ with aba_novo:
                     st.rerun()
         else: st.caption("Sem fixos cadastrados.")
 
-# --- ABA METAS COM EXEMPLO ---
 with aba_metas:
     st.info("💡 Exemplo: Defina R$ 1.000,00 para '🛒 Mercado' para controlar seus gastos essenciais.")
     for cat in CATEGORIAS:
@@ -286,13 +279,11 @@ with aba_metas:
                     st.session_state.metas = buscar_metas()
                     st.rerun()
 
-# --- ABA RESERVA ---
 with aba_reserva:
     total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum() if not df_geral.empty else 0
     total_out = df_geral[df_geral['tipo'] == 'Saída']['valor'].sum() if not df_geral.empty else 0
     balanco = total_in - total_out
     st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.8;font-size:14px;">PATRIMÔNIO ACUMULADO</p><h2>R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
-    
     if not df_geral.empty:
         df_geral['MesAno'] = df_geral['data'].dt.to_period('M').astype(str)
         mensal = df_geral.groupby(['MesAno', 'tipo'])['valor'].sum().unstack(fill_value=0)
@@ -301,7 +292,6 @@ with aba_reserva:
             fig_res.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_res, use_container_width=True)
 
-# --- ABA SONHOS ---
 with aba_sonhos:
     st.markdown("### 🎯 Calculadora de Sonhos")
     st.info("💡 Exemplo: 'Viagem de Férias' ou 'Troca de Carro'.")
