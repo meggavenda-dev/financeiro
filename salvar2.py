@@ -4,6 +4,8 @@ from datetime import date
 import plotly.express as px
 from supabase import create_client, Client
 import os
+import io
+from fpdf import FPDF
 
 # --- CONFIGURAÇÃO SUPABASE ---
 try:
@@ -132,6 +134,36 @@ def buscar_fixos():
     if df.empty: return pd.DataFrame(columns=['id', 'descricao', 'valor', 'categoria'])
     return df
 
+# --- FUNÇÕES DE RELATÓRIO (NOVIDADE) ---
+def gerar_excel(df):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df_exp = df.copy()
+        df_exp['data'] = df_exp['data'].dt.strftime('%d/%m/%Y')
+        df_exp.to_excel(writer, index=False, sheet_name='Lançamentos')
+    return output.getvalue()
+
+def gerar_pdf(df, nome_mes):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(200, 10, f"Relatorio Financeiro - {nome_mes}", ln=True, align='C')
+    pdf.ln(10)
+    pdf.set_font("Helvetica", "B", 10)
+    cols = ["Data", "Descricao", "Valor", "Tipo", "Status"]
+    for col in cols: pdf.cell(38, 10, col, 1)
+    pdf.ln()
+    pdf.set_font("Helvetica", "", 9)
+    for _, row in df.iterrows():
+        pdf.cell(38, 10, row['data'].strftime('%d/%m/%y'), 1)
+        pdf.cell(38, 10, str(row['descricao'])[:18], 1)
+        pdf.cell(38, 10, f"R$ {row['valor']:.2f}", 1)
+        pdf.cell(38, 10, row['tipo'], 1)
+        pdf.cell(38, 10, row['status'], 1)
+        pdf.ln()
+    # CORREÇÃO AQUI: Retornar bytes explicitamente
+    return bytes(pdf.output())
+
 # Sincronização Inicial
 if 'dados' not in st.session_state: st.session_state.dados = buscar_dados()
 if 'metas' not in st.session_state: st.session_state.metas = buscar_metas()
@@ -197,8 +229,6 @@ with aba_resumo:
         c1.metric("Ganhos", f"R$ {entradas:,.2f}")
         c2.metric("Gastos (Pagos)", f"R$ {saidas_pagas:,.2f}")
         c3.metric("Saldo Real", f"R$ {saldo_mes:,.2f}")
-
-        # GRÁFICO REMOVIDO DA ABA MÊS
 
         if st.session_state.metas:
             with st.expander("🎯 Status das Metas"):
@@ -301,7 +331,16 @@ with aba_metas:
 
 with aba_reserva:
     st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.8;font-size:14px;">PATRIMÔNIO REAL</p><h2>R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
-    # GRÁFICO REMOVIDO DA ABA CAIXA (RESERVA)
+    
+    st.markdown("### 📄 Relatórios")
+    if not df_mes.empty:
+        col_rel1, col_rel2 = st.columns(2)
+        with col_rel1:
+            st.download_button(label="📥 Baixar Excel", data=gerar_excel(df_mes), file_name=f"Financeiro_{mes_nome}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        with col_rel2:
+            st.download_button(label="📥 Baixar PDF", data=gerar_pdf(df_mes, mes_nome), file_name=f"Financeiro_{mes_nome}.pdf", mime="application/pdf")
+    else:
+        st.caption("Selecione um mês com dados para gerar relatórios.")
 
 with aba_sonhos:
     st.markdown("### 🎯 Calculadora de Sonhos")
