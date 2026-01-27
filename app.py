@@ -134,7 +134,7 @@ def buscar_fixos():
     if df.empty: return pd.DataFrame(columns=['id', 'descricao', 'valor', 'categoria'])
     return df
 
-# --- FUNÇÕES DE RELATÓRIO (NOVIDADE) ---
+# --- FUNÇÕES DE RELATÓRIO ---
 def gerar_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -161,7 +161,6 @@ def gerar_pdf(df, nome_mes):
         pdf.cell(38, 10, row['tipo'], 1)
         pdf.cell(38, 10, row['status'], 1)
         pdf.ln()
-    # CORREÇÃO AQUI: Retornar bytes explicitamente
     return bytes(pdf.output())
 
 # Sincronização Inicial
@@ -196,6 +195,7 @@ balanco = 0.0
 
 if not df_geral.empty:
     total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum()
+    # Lógica de Negociação: Apenas subtrai do balanço se estiver "Pago"
     total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
     balanco = total_in - total_out_pagas
     
@@ -222,7 +222,6 @@ with aba_resumo:
     if not df_mes.empty:
         entradas = df_mes[df_mes['tipo'] == 'Entrada']['valor'].sum()
         saidas_pagas = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pago')]['valor'].sum()
-        saidas_pendentes = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pendente')]['valor'].sum()
         saldo_mes = entradas - saidas_pagas
 
         c1, c2, c3 = st.columns(3)
@@ -244,7 +243,11 @@ with aba_resumo:
             cor = "#10B981" if row['tipo'] == "Entrada" else "#EF4444"
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
             s_text = row.get('status', 'Pago')
-            s_color, s_bg = ("#10B981", "#D1FAE5") if s_text == "Pago" else ("#F59E0B", "#FEF3C7")
+            
+            # Cores para o badge de status (Novo: Em Negociação)
+            if s_text == "Pago": s_color, s_bg = "#10B981", "#D1FAE5"
+            elif s_text == "Pendente": s_color, s_bg = "#F59E0B", "#FEF3C7"
+            else: s_color, s_bg = "#3B82F6", "#DBEAFE" # Azul para Negociação
             
             # Acompanhamento por Vencimento
             txt_venc = ""
@@ -271,7 +274,7 @@ with aba_resumo:
             
             cp, cd = st.columns([1, 1])
             with cp:
-                if s_text == "Pendente" and st.button("✔ Pagar", key=f"pay_{row['id']}"):
+                if s_text != "Pago" and st.button("✔ Pagar", key=f"pay_{row['id']}"):
                     supabase.table("transacoes").update({"status": "Pago"}).eq("id", row['id']).execute()
                     st.session_state.dados = buscar_dados(); st.rerun()
             with cd:
@@ -289,7 +292,8 @@ with aba_novo:
         with st.form("form_novo", clear_on_submit=True):
             v = st.number_input("Valor", min_value=0.0); d = st.text_input("Descrição")
             t = st.radio("Tipo", ["Saída", "Entrada"], horizontal=True)
-            stat = st.selectbox("Status", ["Pago", "Pendente"])
+            # Lógica: Adicionado o status "Em Negociação"
+            stat = st.selectbox("Status", ["Pago", "Pendente", "Em Negociação"])
             c = st.selectbox("Categoria", CATEGORIAS); dt = st.date_input("Data/Vencimento", date.today())
             fixo_check = st.checkbox("Salvar na lista de Fixos")
             if st.form_submit_button("Salvar"):
@@ -332,6 +336,12 @@ with aba_metas:
 with aba_reserva:
     st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.8;font-size:14px;">PATRIMÔNIO REAL</p><h2>R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
     
+    # Resumo de Dívidas em Negociação
+    if not df_geral.empty:
+        total_negoc = df_geral[df_geral['status'] == "Em Negociação"]['valor'].sum()
+        if total_negoc > 0:
+            st.warning(f"⚠️ Você possui **R$ {total_negoc:,.2f}** em dívidas em negociação (não afetando o patrimônio real).")
+
     st.markdown("### 📄 Relatórios")
     if not df_mes.empty:
         col_rel1, col_rel2 = st.columns(2)
