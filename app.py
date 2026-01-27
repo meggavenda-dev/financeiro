@@ -116,7 +116,7 @@ CATEGORIAS = ["🛒 Mercado", "🏠 Moradia", "🚗 Transporte", "🍕 Lazer", "
 meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
 # --- HEADER ---
-st.markdown("<h1>🏡 Controle Familiar</h1>", unsafe_allow_html=True)
+st.markdown("<h1>🏡 Financeiro</h1>", unsafe_allow_html=True)
 
 hoje = date.today()
 c_m, c_a = st.columns([2, 1])
