@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import date
 import plotly.express as px
 from supabase import create_client, Client
+import os
 
 # --- CONFIGURAÇÃO SUPABASE ---
 try:
@@ -16,7 +17,7 @@ except Exception as e:
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Minha Casa", page_icon="🏡", layout="centered")
 
-# CSS PREMIUM: Design Mobile-First, Neumorfismo e Glassmorphism
+# CSS PREMIUM (Somente Aparência)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -24,13 +25,15 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     .stApp { background-color: #F8FAFC; }
 
-    /* Estilização do Título Principal */
-    .main-title {
-        font-weight: 700; color: #1E293B; font-size: 2rem;
-        text-align: center; margin-bottom: 0.5rem; letter-spacing: -1px;
+    /* Estilização do Título */
+    h1 { 
+        background: linear-gradient(90deg, #1E293B, #3B82F6);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 700; padding-bottom: 10px;
     }
 
-    /* CENTRALIZAÇÃO E RESPONSIVIDADE DAS ABAS */
+    /* ABAS CENTRALIZADAS E RESPONSIVAS (App Style) */
     .stTabs [data-baseweb="tab-list"] {
         display: flex; justify-content: center; gap: 4px; width: 100%;
         background-color: #E2E8F0; border-radius: 16px; padding: 4px;
@@ -41,52 +44,51 @@ st.markdown("""
         font-size: 13px; font-weight: 600; border: none !important;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #FFFFFF !important; color: #3b82f6 !important;
+        background-color: #FFFFFF !important; color: #3B82F6 !important;
         box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
     }
 
     /* CARDS DE MÉTRICAS */
     [data-testid="stMetric"] {
-        background-color: #FFFFFF; border-radius: 24px; padding: 15px;
+        background-color: #FFFFFF; border-radius: 22px; padding: 15px;
         box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05); border: 1px solid #F1F5F9;
     }
-    [data-testid="stMetricValue"] { font-weight: 700; color: #0F172A; }
 
-    /* BOTÕES ESTILIZADOS */
+    /* BOTÕES */
     .stButton>button {
-        width: 100%; border-radius: 16px; background: #3b82f6;
-        color: white; border: none; padding: 14px; font-weight: 700;
-        transition: all 0.2s ease; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+        width: 100%; border-radius: 16px; background: #3B82F6;
+        color: white; border: none; padding: 12px; font-weight: 700;
+        transition: all 0.2s ease;
     }
-    .stButton>button:hover { background: #2563eb; transform: translateY(-1px); }
+    .stButton>button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
 
-    /* CARTÕES DE TRANSAÇÃO (WALLET STYLE) */
+    /* TRANSACTION CARDS (Wallet Style) */
     .transaction-card {
         background-color: #FFFFFF; padding: 16px; border-radius: 20px;
-        margin-bottom: 12px; display: flex; justify-content: space-between;
+        margin-bottom: 10px; display: flex; justify-content: space-between;
         align-items: center; border: 1px solid #F1F5F9;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.02);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     }
     .card-icon {
-        background: #F1F5F9; width: 42px; height: 42px; border-radius: 12px;
-        display: flex; align-items: center; justify-content: center; font-size: 20px;
+        background: #F1F5F9; width: 40px; height: 40px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center; font-size: 18px;
         margin-right: 12px;
     }
 
-    /* CARD DE RESERVA (GLASSMORPHISM) */
+    /* CAIXA / RESERVA CARD */
     .reserva-card {
-        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-        color: white; padding: 30px; border-radius: 28px; text-align: center;
+        background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
+        color: white; padding: 25px; border-radius: 24px; text-align: center;
         box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); margin-bottom: 25px;
     }
 
-    /* ESCONDER ELEMENTOS STREAMLIT */
+    /* UI CLEANUP */
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-    .block-container { padding-top: 1.5rem !important; }
+    .block-container { padding-top: 2rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÕES DE BANCO DE DADOS ---
+# --- FUNÇÕES DE BANCO DE DADOS (MANTIDAS) ---
 def buscar_dados():
     res = supabase.table("transacoes").select("*").execute()
     df = pd.DataFrame(res.data)
@@ -102,24 +104,27 @@ def buscar_fixos():
     res = supabase.table("fixos").select("*").execute()
     return pd.DataFrame(res.data)
 
-# Sincronização de Estado
-if 'dados' not in st.session_state: st.session_state.dados = buscar_dados()
-if 'metas' not in st.session_state: st.session_state.metas = buscar_metas()
-if 'fixos' not in st.session_state: st.session_state.fixos = buscar_fixos()
+# Sincronização Inicial
+if 'dados' not in st.session_state:
+    st.session_state.dados = buscar_dados()
+if 'metas' not in st.session_state:
+    st.session_state.metas = buscar_metas()
+if 'fixos' not in st.session_state:
+    st.session_state.fixos = buscar_fixos()
 
 CATEGORIAS = ["🛒 Mercado", "🏠 Moradia", "🚗 Transporte", "🍕 Lazer", "💡 Contas", "💰 Salário", "✨ Outros"]
 meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
 # --- HEADER ---
-st.markdown('<div class="main-title">MyFinance Casa</div>', unsafe_allow_html=True)
+st.markdown("<h1>🏡 Controle Familiar</h1>", unsafe_allow_html=True)
 
 hoje = date.today()
-c_m, c_a = st.columns([1.5, 1])
-mes_nome = c_m.selectbox("", meses, index=hoje.month - 1, label_visibility="collapsed")
-ano_ref = c_a.number_input("", value=hoje.year, step=1, label_visibility="collapsed")
+c_m, c_a = st.columns([2, 1])
+mes_nome = c_m.selectbox("Mês", meses, index=hoje.month - 1)
+ano_ref = c_a.number_input("Ano", value=hoje.year, step=1)
 mes_num = meses.index(mes_nome) + 1
 
-# --- PROCESSAMENTO ---
+# --- PROCESSAMENTO (MANTIDO) ---
 df_geral = st.session_state.dados.copy()
 if not df_geral.empty:
     df_mes = df_geral[(df_geral['data'].dt.month == mes_num) & (df_geral['data'].dt.year == ano_ref)]
@@ -127,9 +132,10 @@ if not df_geral.empty:
     ano_ant = ano_ref - 1 if mes_num == 1 else ano_ref
     df_ant = df_geral[(df_geral['data'].dt.month == mes_ant) & (df_geral['data'].dt.year == ano_ant)]
 else:
-    df_mes, df_ant = pd.DataFrame(), pd.DataFrame()
+    df_mes = pd.DataFrame()
+    df_ant = pd.DataFrame()
 
-# ABAS COM DESIGN DE APP
+# ABAS CENTRALIZADAS
 aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
 
 # --- ABA RESUMO ---
@@ -139,80 +145,114 @@ with aba_resumo:
         saidas = df_mes[df_mes['tipo'] == 'Saída']['valor'].sum()
         
         c1, c2 = st.columns(2)
-        c1.metric("Entradas", f"R$ {entradas:,.2f}")
-        c2.metric("Saídas", f"R$ {saidas:,.2f}")
+        c1.metric("Ganhos", f"R$ {entradas:,.2f}")
+        c2.metric("Gastos", f"R$ {saidas:,.2f}")
 
         if not df_ant.empty:
             saidas_ant = df_ant[df_ant['tipo'] == 'Saída']['valor'].sum()
             fig_comp = px.bar(x=[meses[mes_ant-1], mes_nome], y=[saidas_ant, saidas], 
-                              color_discrete_sequence=["#CBD5E0", "#3b82f6"])
-            fig_comp.update_layout(height=230, showlegend=False, paper_bgcolor='rgba(0,0,0,0)', 
-                                  plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=30, b=0, l=0, r=0))
+                              color_discrete_sequence=["#CBD5E0", "#3B82F6"])
+            fig_comp.update_layout(height=230, showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=10, b=0, l=0, r=0))
             st.plotly_chart(fig_comp, use_container_width=True)
+
+        if st.session_state.metas:
+            with st.expander("🎯 Status das Metas"):
+                gastos_cat = df_mes[df_mes['tipo'] == 'Saída'].groupby('categoria')['valor'].sum()
+                for cat, lim in st.session_state.metas.items():
+                    if lim > 0:
+                        atual = gastos_cat.get(cat, 0)
+                        st.write(f"**{cat}** (R$ {atual:,.0f} / {lim:,.0f})")
+                        st.progress(min(atual/lim, 1.0))
 
         st.markdown(f"### Histórico")
         for idx, row in df_mes.sort_values(by='data', ascending=False).iterrows():
-            cor = "#10b981" if row['tipo'] == "Entrada" else "#ef4444"
-            icon = row['categoria'].split()[0] if " " in row['categoria'] else "💰"
+            cor = "#10B981" if row['tipo'] == "Entrada" else "#EF4444"
+            icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
             st.markdown(f"""
                 <div class="transaction-card">
                     <div style="display: flex; align-items: center;">
                         <div class="card-icon">{icon}</div>
                         <div>
-                            <div style="font-weight: 600; color: #1e293b;">{row['descricao']}</div>
-                            <div style="font-size: 11px; color: #64748b;">{row['data'].strftime('%d %b')}</div>
+                            <div style="font-weight: 600; color: #1E293B;">{row["descricao"]}</div>
+                            <div style="font-size: 11px; color: #64748B;">{row["data"].strftime('%d %b')}</div>
                         </div>
                     </div>
-                    <div style="color: {cor}; font-weight: 700; text-align: right;">
-                        {' + ' if row['tipo'] == 'Entrada' else ' - '} R$ {row['valor']:,.2f}
-                    </div>
+                    <div style="color: {cor}; font-weight: 700;">R$ {row["valor"]:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
-            if st.button(f"Remover {row['descricao']}", key=f"del_{row['id']}", type="secondary"):
-                supabase.table("transacoes").delete().eq("id", row['id']).execute()
-                st.session_state.dados = buscar_dados()
-                st.rerun()
     else:
-        st.info("Toque em 'Novo' para registrar movimentações.")
+        st.info("Toque em 'Novo' para começar!")
 
 # --- ABA NOVO ---
 with aba_novo:
-    with st.form("form_novo", clear_on_submit=True):
-        st.markdown("### Novo Lançamento")
-        v = st.number_input("Valor", min_value=0.0, step=10.0)
-        d = st.text_input("Descrição", placeholder="Ex: Compras Mensais")
-        t = st.radio("Tipo", ["Saída", "Entrada"], horizontal=True)
-        c = st.selectbox("Categoria", CATEGORIAS)
-        dt = st.date_input("Data", date.today())
-        fixo = st.checkbox("Salvar como Gasto Fixo")
-        if st.form_submit_button("Confirmar Lançamento"):
-            supabase.table("transacoes").insert({"data": str(dt), "descricao": d, "valor": v, "tipo": t, "categoria": c}).execute()
-            if fixo: supabase.table("fixos").insert({"descricao": d, "valor": v, "categoria": c}).execute()
-            st.session_state.dados = buscar_dados()
-            st.rerun()
+    aba_unit, aba_fixo = st.tabs(["Lançamento Único", "🗓️ Fixos"])
+    with aba_unit:
+        with st.form("form_novo", clear_on_submit=True):
+            v = st.number_input("Valor", min_value=0.0)
+            d = st.text_input("Descrição")
+            t = st.radio("Tipo", ["Saída", "Entrada"], horizontal=True)
+            c = st.selectbox("Categoria", CATEGORIAS)
+            dt = st.date_input("Data", date.today())
+            fixo_check = st.checkbox("Salvar como Fixo")
+            if st.form_submit_button("Salvar"):
+                supabase.table("transacoes").insert({"data": str(dt), "descricao": d, "valor": v, "tipo": t, "categoria": c}).execute()
+                if fixo_check:
+                    supabase.table("fixos").insert({"descricao": d, "valor": v, "categoria": c}).execute()
+                st.session_state.dados = buscar_dados()
+                st.session_state.fixos = buscar_fixos()
+                st.rerun()
 
-# --- ABA RESERVA E SONHOS ---
+    with aba_fixo:
+        if not st.session_state.fixos.empty:
+            for idx, row in st.session_state.fixos.iterrows():
+                col1, col2 = st.columns([3, 1])
+                col1.write(f"**{row['descricao']}** R$ {row['valor']:,.2f}")
+                if col2.button("OK", key=f"f_{idx}"):
+                    d_f = str(date(ano_ref, mes_num, 1))
+                    supabase.table("transacoes").insert({"data": d_f, "descricao": row['descricao'], "valor": row['valor'], "tipo": "Saída", "categoria": row['categoria']}).execute()
+                    st.session_state.dados = buscar_dados()
+                    st.toast("Lançado!")
+                    st.rerun()
+        else: st.caption("Sem fixos cadastrados.")
+
+# --- ABA METAS ---
+with aba_metas:
+    for cat in CATEGORIAS:
+        if cat != "💰 Salário":
+            atual_m = float(st.session_state.metas.get(cat, 0))
+            nova_meta = st.number_input(f"Meta {cat}", min_value=0.0, value=atual_m)
+            if nova_meta != atual_m:
+                if st.button(f"Atualizar {cat}"):
+                    supabase.table("metas").upsert({"categoria": cat, "limite": nova_meta}).execute()
+                    st.session_state.metas = buscar_metas()
+                    st.rerun()
+
+# --- ABA RESERVA ---
 with aba_reserva:
     total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum() if not df_geral.empty else 0
     total_out = df_geral[df_geral['tipo'] == 'Saída']['valor'].sum() if not df_geral.empty else 0
     balanco = total_in - total_out
-    st.markdown(f"""
-        <div class="reserva-card">
-            <p style="margin:0; opacity:0.7; font-size: 14px; font-weight: 600;">PATRIMÔNIO ACUMULADO</p>
-            <h2 style="margin:0; color:white; font-size: 32px;">R$ {balanco:,.2f}</h2>
-        </div>
-    """, unsafe_allow_html=True)
-
-with aba_sonhos:
-    st.markdown("### 🚀 Calculadora de Sonhos")
-    v_sonho = st.number_input("Quanto custa o seu objetivo? (R$)", min_value=0.0)
-    if not df_geral.empty and v_sonho > 0:
-        df_geral['ma'] = df_geral['data'].dt.to_period('M').astype(str)
-        mensal = df_geral.groupby(['ma', 'tipo'])['valor'].sum().unstack(fill_value=0)
+    st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.8;font-size:14px;">PATRIMÔNIO ACUMULADO</p><h2>R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
+    
+    if not df_geral.empty:
+        df_geral['MesAno'] = df_geral['data'].dt.to_period('M').astype(str)
+        mensal = df_geral.groupby(['MesAno', 'tipo'])['valor'].sum().unstack(fill_value=0)
         if 'Entrada' in mensal and 'Saída' in mensal:
-            sobra = (mensal['Entrada'] - mensal['Saída']).mean()
-            if sobra > 0:
-                m_f = int(v_sonho / sobra) + 1
-                st.success(f"Com uma sobra média de R$ {sobra:,.2f}, você conquista em **{m_f} meses**.")
+            fig_res = px.line(mensal, y=mensal['Entrada'] - mensal['Saída'], title="Saúde Financeira Mensal", markers=True)
+            fig_res.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig_res, use_container_width=True)
+
+# --- ABA SONHOS ---
+with aba_sonhos:
+    st.markdown("### 🎯 Calculadora de Sonhos")
+    v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
+    if not df_geral.empty and v_sonho > 0:
+        df_geral['MesAno'] = df_geral['data'].dt.to_period('M').astype(str)
+        bal_m = df_geral.groupby(['MesAno', 'tipo'])['valor'].sum().unstack(fill_value=0)
+        if 'Entrada' in bal_m and 'Saída' in bal_m:
+            sobra_m = (bal_m['Entrada'] - bal_m['Saída']).mean()
+            if sobra_m > 0:
+                m_f = int(v_sonho / sobra_m) + 1
+                st.info(f"Com uma sobra média de R$ {sobra_m:,.2f}, faltam aprox. **{m_f} meses**.")
                 st.progress(min(max(balanco/v_sonho, 0.0), 1.0))
-            else: st.warning("Ajuste seus gastos para aumentar sua sobra mensal.")
+            else: st.warning("Sua sobra média está negativa.")
