@@ -29,130 +29,128 @@ st.markdown("""
         display: flex; justify-content: space-between; align-items: center;
         box-shadow: 0 2px 6px rgba(0,0,0,0.02); border: 1px solid #F0F4F8;
     }
-    /* Estilo para o seletor de data e inputs */
-    div.stDateInput, div.stSelectbox, div.stNumberInput { border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- SISTEMA DE ARQUIVOS (BANCO DE DADOS) ---
+# --- BANCO DE DADOS ---
 DB_FILE = "dados_financeiros.csv"
-
-def salvar_dados(df):
-    df.to_csv(DB_FILE, index=False)
+META_FILE = "metas_financeiras.csv"
 
 def carregar_dados():
     if os.path.exists(DB_FILE):
-        df_load = pd.read_csv(DB_FILE)
-        df_load['Data'] = pd.to_datetime(df_load['Data'])
-        return df_load
+        df = pd.read_csv(DB_FILE)
+        df['Data'] = pd.to_datetime(df['Data'])
+        return df
     return pd.DataFrame(columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
 
-# Inicialização da sessão
+def carregar_metas():
+    if os.path.exists(META_FILE):
+        return pd.read_csv(META_FILE, index_col='Categoria').to_dict()['Limite']
+    return {}
+
+# Inicialização
 if 'dados' not in st.session_state:
     st.session_state.dados = carregar_dados()
+if 'metas' not in st.session_state:
+    st.session_state.metas = carregar_metas()
 
-# --- HEADER E FILTRO ---
+CATEGORIAS = ["🛒 Mercado", "🏠 Moradia", "🚗 Transporte", "🍕 Lazer", "💡 Contas", "💰 Salário", "✨ Outros"]
+
+# --- HEADER ---
 st.markdown("<h1 style='text-align: center;'>🏡 Controle Familiar</h1>", unsafe_allow_html=True)
 
 hoje = date.today()
 meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
-col_m, col_a = st.columns([2, 1])
-mes_nome = col_m.selectbox("Mês de Referência", meses, index=hoje.month - 1)
-ano_ref = col_a.number_input("Ano", value=hoje.year, step=1)
+c_m, c_a = st.columns([2, 1])
+mes_nome = c_m.selectbox("Mês", meses, index=hoje.month - 1)
+ano_ref = c_a.number_input("Ano", value=hoje.year, step=1)
 mes_num = meses.index(mes_nome) + 1
 
-# Filtragem para a visualização
-df_base = st.session_state.dados.copy()
-if not df_base.empty:
-    df_base['Data'] = pd.to_datetime(df_base['Data'])
-    df_filtrado = df_base[(df_base['Data'].dt.month == mes_num) & (df_base['Data'].dt.year == ano_ref)]
-else:
-    df_filtrado = df_base
+# Filtragem
+df_filtrado = st.session_state.dados.copy()
+if not df_filtrado.empty:
+    df_filtrado = df_filtrado[(df_filtrado['Data'].dt.month == mes_num) & (df_filtrado['Data'].dt.year == ano_ref)]
 
-aba_resumo, aba_novo, aba_ajustes = st.tabs(["✨ Meu Mês", "➕ Novo", "⚙️ Ajustes"])
+aba_resumo, aba_novo, aba_metas, aba_ajustes = st.tabs(["✨ Meu Mês", "➕ Novo", "🎯 Metas", "⚙️"])
 
 # --- ABA RESUMO ---
 with aba_resumo:
     if not df_filtrado.empty:
         entradas = df_filtrado[df_filtrado['Tipo'] == 'Entrada']['Valor'].sum()
         saidas = df_filtrado[df_filtrado['Tipo'] == 'Saída']['Valor'].sum()
-        saldo = entradas - saidas
-
+        
         c1, c2 = st.columns(2)
         c1.metric("Ganhos", f"R$ {entradas:,.2f}")
         c2.metric("Gastos", f"R$ {saidas:,.2f}")
-        
-        # Barra de Saúde Financeira
-        if entradas > 0:
-            porcentagem = min(saidas / entradas, 1.0)
-            st.write(f"**Uso da Renda: {porcentagem*100:.1f}%**")
-            st.progress(porcentagem)
-        
-        st.markdown(f"""
-            <div style="background: #3182CE; padding: 15px; border-radius: 20px; text-align: center; color: white; margin: 15px 0;">
-                <p style='margin:0; font-size: 14px; opacity: 0.8;'>Saldo Final em {mes_nome}</p>
-                <h2 style='margin:0; color: white;'>R$ {saldo:,.2f}</h2>
-            </div>
-        """, unsafe_allow_html=True)
 
-        if saidas > 0:
-            st.markdown("### 📊 Gastos por Categoria")
-            fig = px.pie(df_filtrado[df_filtrado['Tipo'] == 'Saída'], values='Valor', names='Categoria', 
-                         hole=0.6, color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), showlegend=True)
-            st.plotly_chart(fig, use_container_width=True)
+        # --- SEÇÃO DE METAS NO RESUMO ---
+        if st.session_state.metas:
+            st.markdown("### 🎯 Limite por Categoria")
+            gastos_por_cat = df_filtrado[df_filtrado['Tipo'] == 'Saída'].groupby('Categoria')['Valor'].sum()
+            
+            for cat, limite in st.session_state.metas.items():
+                if limite > 0:
+                    gasto_atual = gastos_por_cat.get(cat, 0)
+                    progresso = min(gasto_atual / limite, 1.0)
+                    cor = "red" if gasto_atual > limite else "green"
+                    st.write(f"**{cat}**: R$ {gasto_atual:,.2f} de R$ {limite:,.2f}")
+                    st.progress(progresso)
+                    if gasto_atual > limite:
+                        st.caption(f"⚠️ Você ultrapassou R$ {gasto_atual - limite:,.2f} do limite!")
 
-        st.markdown("### 🕒 Histórico do Mês")
+        st.markdown(f"### 🕒 Histórico de {mes_nome}")
         for idx, row in df_filtrado.sort_values(by='Data', ascending=False).iterrows():
             cor_v = "#38A169" if row['Tipo'] == "Entrada" else "#E53E3E"
             st.markdown(f"""
                 <div class="transaction-card">
                     <div>
-                        <strong style="color: #2D3748;">{row['Descrição']}</strong><br>
-                        <span style="color: #A0AEC0; font-size: 11px;">{row['Categoria']} | {row['Data'].strftime('%d/%m')}</span>
+                        <strong>{row['Descrição']}</strong><br>
+                        <small>{row['Categoria']} | {row['Data'].strftime('%d/%m')}</small>
                     </div>
                     <div style="color: {cor_v}; font-weight: bold;">R$ {row['Valor']:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
     else:
-        st.info(f"Nenhum registro encontrado para {mes_nome} de {ano_ref}.")
+        st.info("Nenhum dado este mês.")
 
 # --- ABA NOVO ---
 with aba_novo:
-    st.markdown("### ✍️ Registrar")
     with st.form("add_form", clear_on_submit=True):
-        valor = st.number_input("Valor (R$)", min_value=0.0, step=1.0)
-        desc = st.text_input("O que é?", placeholder="Ex: Compras no Carrefour")
+        valor = st.number_input("Valor (R$)", min_value=0.0)
+        desc = st.text_input("Descrição")
         tipo = st.radio("Tipo", ["Saída", "Entrada"], horizontal=True)
-        categoria = st.selectbox("Categoria", ["🛒 Mercado", "🏠 Moradia", "🚗 Transporte", "🍕 Lazer", "💡 Contas", "💰 Salário", "✨ Outros"])
+        cat = st.selectbox("Categoria", CATEGORIAS)
         data_lan = st.date_input("Data", date.today())
-        
-        if st.form_submit_button("Salvar no Livro"):
-            if desc and valor > 0:
-                novo = pd.DataFrame([[pd.to_datetime(data_lan), desc, valor, tipo, categoria]], 
-                                   columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
-                st.session_state.dados = pd.concat([st.session_state.dados, novo], ignore_index=True)
-                salvar_dados(st.session_state.dados)
-                st.toast("Sucesso!", icon="✅")
-                st.rerun()
-            else:
-                st.warning("Por favor, preencha a descrição e o valor.")
+        if st.form_submit_button("Salvar"):
+            novo = pd.DataFrame([[pd.to_datetime(data_lan), desc, valor, tipo, cat]], columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
+            st.session_state.dados = pd.concat([st.session_state.dados, novo], ignore_index=True)
+            st.session_state.dados.to_csv(DB_FILE, index=False)
+            st.rerun()
+
+# --- ABA METAS ---
+with aba_metas:
+    st.markdown("### 🎯 Definir Orçamentos")
+    st.caption("Quanto você planeja gastar no máximo em cada categoria por mês?")
+    
+    for cat in CATEGORIAS:
+        if cat != "💰 Salário":
+            atual = st.session_state.metas.get(cat, 0.0)
+            nova_meta = st.number_input(f"Limite para {cat}", min_value=0.0, value=float(atual), key=f"meta_{cat}")
+            st.session_state.metas[cat] = nova_meta
+    
+    if st.button("Salvar Metas"):
+        df_metas = pd.DataFrame.from_dict(st.session_state.metas, orient='index', columns=['Limite'])
+        df_metas.index.name = 'Categoria'
+        df_metas.to_csv(META_FILE)
+        st.success("Metas atualizadas!")
+        st.rerun()
 
 # --- ABA AJUSTES ---
 with aba_ajustes:
-    st.markdown("### 🔧 Gerenciar Dados")
-    if not df_filtrado.empty:
-        st.write("Toque para remover um item deste mês:")
-        for idx, row in df_filtrado.iterrows():
-            if st.button(f"🗑️ Remover: {row['Descrição']} (R$ {row['Valor']})", key=f"del_{idx}"):
-                st.session_state.dados = st.session_state.dados.drop(idx)
-                salvar_dados(st.session_state.dados)
-                st.rerun()
-    
-    st.divider()
-    if st.button("🚨 Apagar todos os dados do App"):
-        if st.checkbox("Eu tenho certeza que quero apagar tudo"):
-            st.session_state.dados = pd.DataFrame(columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
-            salvar_dados(st.session_state.dados)
-            st.rerun()
+    if st.button("🗑️ Limpar Todos os Dados"):
+        if os.path.exists(DB_FILE): os.remove(DB_FILE)
+        if os.path.exists(META_FILE): os.remove(META_FILE)
+        st.session_state.dados = pd.DataFrame(columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
+        st.session_state.metas = {}
+        st.rerun()
