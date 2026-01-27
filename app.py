@@ -290,6 +290,7 @@ with aba_novo:
         else: st.caption("Sem fixos configurados.")
 
 with aba_metas:
+    st.info("💡 Exemplo: Defina R$ 1.000,00 para '🛒 Mercado' para controlar seus gastos essenciais.")
     for cat in CATEGORIAS:
         if cat != "💰 Salário":
             atual_m = float(st.session_state.metas.get(cat, 0))
