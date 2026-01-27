@@ -246,13 +246,17 @@ with aba_novo:
             dt = st.date_input("Data", date.today())
             fixo_check = st.checkbox("Salvar como Fixo")
             if st.form_submit_button("Salvar"):
-                supabase.table("transacoes").insert({"data": str(dt), "descricao": d, "valor": v, "tipo": t, "categoria": c}).execute()
-                if fixo_check:
-                    supabase.table("fixos").insert({"descricao": d, "valor": v, "categoria": c}).execute()
-                st.success(f"{t} cadastrada com sucesso!")
-                st.session_state.dados = buscar_dados()
-                st.session_state.fixos = buscar_fixos()
-                st.rerun()
+                # IMPLEMENTAÇÃO SOLICITADA: Bloqueio de valor zero
+                if v > 0:
+                    supabase.table("transacoes").insert({"data": str(dt), "descricao": d, "valor": v, "tipo": t, "categoria": c}).execute()
+                    if fixo_check:
+                        supabase.table("fixos").insert({"descricao": d, "valor": v, "categoria": c}).execute()
+                    st.success(f"{t} cadastrada com sucesso!")
+                    st.session_state.dados = buscar_dados()
+                    st.session_state.fixos = buscar_fixos()
+                    st.rerun()
+                else:
+                    st.error("O valor do lançamento deve ser maior que zero.")
 
     with aba_fixo:
         if not st.session_state.fixos.empty:
