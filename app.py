@@ -36,7 +36,7 @@ if 'dados' not in st.session_state:
     st.session_state.dados = pd.DataFrame(columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
 
 # --- BARRA SUPERIOR (FILTRO MENSAL) ---
-st.markdown("<h1 style='text-align: center;'>🏡 Finanças da Família</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>🏡 Minha Casa</h1>", unsafe_allow_html=True)
 
 hoje = date.today()
 meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
