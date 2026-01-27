@@ -4,4 +4,3 @@ plotly
 supabase
 fpdf2
 xlsxwriter
-io
