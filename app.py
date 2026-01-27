@@ -300,7 +300,7 @@ with aba_reserva:
 # --- ABA SONHOS ---
 with aba_sonhos:
     st.markdown("### 🎯 Calculadora de Sonhos")
-    st.caption("💡 Exemplo: 'Viagem de Férias' ou 'Troca de Carro'.")
+    st.info("💡 Exemplo: 'Viagem de Férias' ou 'Troca de Carro'.")
     v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
     if not df_geral.empty and v_sonho > 0:
         df_geral['MesAno'] = df_geral['data'].dt.to_period('M').astype(str)
