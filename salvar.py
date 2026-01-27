@@ -17,7 +17,7 @@ except Exception as e:
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Minha Casa", page_icon="🏡", layout="centered")
 
-# CSS PREMIUM (Somente Aparência + Botão de Excluir Sutil)
+# CSS PREMIUM ATUALIZADO
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -25,15 +25,26 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     .stApp { background-color: #F8FAFC; }
 
-    /* Estilização do Título */
-    h1 { 
+    /* Estilização do Título Centralizado */
+    .header-container {
+        text-align: center;
+        padding-bottom: 20px;
+    }
+    .main-title { 
         background: linear-gradient(90deg, #1E293B, #3B82F6);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-weight: 700; padding-bottom: 10px;
+        font-weight: 700;
+        font-size: 2.5rem;
+        margin-bottom: 0px;
+    }
+    .slogan {
+        color: #64748B;
+        font-size: 1rem;
+        font-weight: 400;
     }
 
-    /* ABAS CENTRALIZADAS E RESPONSIVAS (App Style) */
+    /* ABAS CENTRALIZADAS */
     .stTabs [data-baseweb="tab-list"] {
         display: flex; justify-content: center; gap: 4px; width: 100%;
         background-color: #E2E8F0; border-radius: 16px; padding: 4px;
@@ -62,7 +73,7 @@ st.markdown("""
     }
     .stButton>button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
 
-    /* TRANSACTION CARDS (Wallet Style) */
+    /* TRANSACTION CARDS */
     .transaction-card {
         background-color: #FFFFFF; padding: 16px; border-radius: 20px;
         margin-bottom: 0px; display: flex; justify-content: space-between;
@@ -75,14 +86,21 @@ st.markdown("""
         margin-right: 12px;
     }
 
-    /* CAIXA / RESERVA CARD */
+    /* RESERVA CARD */
     .reserva-card {
         background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
         color: white; padding: 25px; border-radius: 24px; text-align: center;
         box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); margin-bottom: 25px;
     }
 
-    /* BOTÃO EXCLUIR SUTIL */
+    /* MELHORIA NAS METAS */
+    .meta-container {
+        background-color: #F1F5F9;
+        padding: 12px;
+        border-radius: 12px;
+        margin-bottom: 10px;
+    }
+
     .btn-excluir > div > button {
         background-color: transparent !important;
         color: #EF4444 !important;
@@ -93,13 +111,12 @@ st.markdown("""
         text-align: right !important;
     }
 
-    /* UI CLEANUP */
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-    .block-container { padding-top: 2rem !important; }
+    .block-container { padding-top: 1.5rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÕES DE BANCO DE DADOS (MANTIDAS) ---
+# --- FUNÇÕES DE BANCO DE DADOS ---
 def buscar_dados():
     res = supabase.table("transacoes").select("*").execute()
     df = pd.DataFrame(res.data)
@@ -126,8 +143,13 @@ if 'fixos' not in st.session_state:
 CATEGORIAS = ["🛒 Mercado", "🏠 Moradia", "🚗 Transporte", "🍕 Lazer", "💡 Contas", "💰 Salário", "✨ Outros"]
 meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
-# --- HEADER ---
-st.markdown("<h1>🏡 Financeiro</h1>", unsafe_allow_html=True)
+# --- HEADER CENTRALIZADO COM SLOGAN ---
+st.markdown("""
+    <div class="header-container">
+        <div class="main-title">🏡 Financeiro</div>
+        <div class="slogan">Gestão inteligente para o seu lar</div>
+    </div>
+""", unsafe_allow_html=True)
 
 hoje = date.today()
 c_m, c_a = st.columns([2, 1])
@@ -135,7 +157,7 @@ mes_nome = c_m.selectbox("Mês", meses, index=hoje.month - 1)
 ano_ref = c_a.number_input("Ano", value=hoje.year, step=1)
 mes_num = meses.index(mes_nome) + 1
 
-# --- PROCESSAMENTO (MANTIDO) ---
+# --- PROCESSAMENTO ---
 df_geral = st.session_state.dados.copy()
 if not df_geral.empty:
     df_mes = df_geral[(df_geral['data'].dt.month == mes_num) & (df_geral['data'].dt.year == ano_ref)]
@@ -146,7 +168,7 @@ else:
     df_mes = pd.DataFrame()
     df_ant = pd.DataFrame()
 
-# ABAS CENTRALIZADAS
+# ABAS
 aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
 
 # --- ABA RESUMO ---
@@ -168,21 +190,29 @@ with aba_resumo:
             fig_comp.update_layout(height=230, showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=10, b=0, l=0, r=0))
             st.plotly_chart(fig_comp, use_container_width=True)
 
+        # MELHORIA NA APARÊNCIA DAS METAS
         if st.session_state.metas:
             with st.expander("🎯 Status das Metas"):
                 gastos_cat = df_mes[df_mes['tipo'] == 'Saída'].groupby('categoria')['valor'].sum()
                 for cat, lim in st.session_state.metas.items():
                     if lim > 0:
                         atual = gastos_cat.get(cat, 0)
-                        st.write(f"**{cat}** (R$ {atual:,.0f} / {lim:,.0f})")
-                        st.progress(min(atual/lim, 1.0))
+                        porcentagem = min(atual/lim, 1.0)
+                        cor_meta = "#3B82F6" if porcentagem < 0.8 else "#EF4444"
+                        st.markdown(f"""
+                            <div class="meta-container">
+                                <div style="display: flex; justify-content: space-between; font-size: 14px;">
+                                    <b>{cat}</b>
+                                    <span>R$ {atual:,.0f} de R$ {lim:,.0f}</span>
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        st.progress(porcentagem)
 
         st.markdown(f"### Histórico")
         for idx, row in df_mes.sort_values(by='data', ascending=False).iterrows():
             cor = "#10B981" if row['tipo'] == "Entrada" else "#EF4444"
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
-            
-            # Card da transação
             st.markdown(f"""
                 <div class="transaction-card">
                     <div style="display: flex; align-items: center;">
@@ -195,8 +225,6 @@ with aba_resumo:
                     <div style="color: {cor}; font-weight: 700;">R$ {row["valor"]:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
-            
-            # Botão de excluir sutil alinhado à direita
             col_v, col_del = st.columns([4, 1])
             with col_del:
                 st.markdown('<div class="btn-excluir">', unsafe_allow_html=True)
@@ -241,8 +269,9 @@ with aba_novo:
                     st.rerun()
         else: st.caption("Sem fixos cadastrados.")
 
-# --- ABA METAS ---
+# --- ABA METAS COM EXEMPLO ---
 with aba_metas:
+    st.info("💡 Exemplo: Defina R$ 1.000,00 para '🛒 Mercado' para controlar seus gastos essenciais.")
     for cat in CATEGORIAS:
         if cat != "💰 Salário":
             atual_m = float(st.session_state.metas.get(cat, 0))
@@ -271,6 +300,7 @@ with aba_reserva:
 # --- ABA SONHOS ---
 with aba_sonhos:
     st.markdown("### 🎯 Calculadora de Sonhos")
+    st.info("💡 Exemplo: 'Viagem de Férias' ou 'Troca de Carro'.")
     v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
     if not df_geral.empty and v_sonho > 0:
         df_geral['MesAno'] = df_geral['data'].dt.to_period('M').astype(str)
