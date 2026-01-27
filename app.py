@@ -276,6 +276,7 @@ with aba_reserva:
 
 with aba_sonhos:
     st.markdown("### 🚀 Calculadora de Sonhos")
+    st.info("💡 Exemplo: Uma viagem ou um carro.")
     v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
     if v_sonho > 0:
         # Tenta usar o saldo_mes calculado na aba_resumo, caso contrário 0
