@@ -154,10 +154,12 @@ with aba_resumo:
     if not df_mes.empty:
         entradas = df_mes[df_mes['tipo'] == 'Entrada']['valor'].sum()
         saidas = df_mes[df_mes['tipo'] == 'Saída']['valor'].sum()
+        saldo_mes = entradas - saidas
         
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         c1.metric("Ganhos", f"R$ {entradas:,.2f}")
         c2.metric("Gastos", f"R$ {saidas:,.2f}")
+        c3.metric("Saldo", f"R$ {saldo_mes:,.2f}", delta=saldo_mes, delta_color="normal")
 
         if not df_ant.empty:
             saidas_ant = df_ant[df_ant['tipo'] == 'Saída']['valor'].sum()
