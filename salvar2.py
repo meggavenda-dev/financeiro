@@ -26,6 +26,10 @@ st.markdown(f"""
             font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700;
             text-transform: uppercase; margin-top: 4px; display: inline-block;
         }}
+        /* Estilo para Vencimento */
+        .vencimento-alerta {{
+            color: #EF4444; font-size: 11px; font-weight: 600;
+        }}
     </style>
     <link rel="shortcut icon" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
     <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
@@ -149,11 +153,11 @@ mes_nome = c_m.selectbox("Mês", meses, index=hoje.month - 1)
 ano_ref = c_a.number_input("Ano", value=hoje.year, step=1)
 mes_num = meses.index(mes_nome) + 1
 
-# --- PROCESSAMENTO DE DADOS (CORREÇÃO DE NameError E INICIALIZAÇÃO) ---
+# --- SEGURANÇA DE FLUXO E PROCESSAMENTO DE DADOS ---
 df_geral = st.session_state.dados.copy()
 colunas_padrao = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status']
 df_mes = pd.DataFrame(columns=colunas_padrao)
-df_ant = pd.DataFrame(columns=colunas_padrao)
+df_atrasados_passado = pd.DataFrame(columns=colunas_padrao)
 total_in = 0.0
 total_out_pagas = 0.0
 balanco = 0.0
@@ -162,15 +166,29 @@ if not df_geral.empty:
     total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum()
     total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
     balanco = total_in - total_out_pagas
+    
+    # Filtro do Mês Selecionado
     df_mes = df_geral[(df_geral['data'].dt.month == mes_num) & (df_geral['data'].dt.year == ano_ref)]
-    mes_ant_num = 12 if mes_num == 1 else mes_num - 1
-    ano_ant_num = ano_ref - 1 if mes_num == 1 else ano_ref
-    df_ant = df_geral[(df_geral['data'].dt.month == mes_ant_num) & (df_geral['data'].dt.year == ano_ant_num)]
+    
+    # CONTROLE DE ATRASADOS: Pendências de meses ANTERIORES ao selecionado
+    data_inicio_mes_selecionado = pd.Timestamp(date(ano_ref, mes_num, 1))
+    df_atrasados_passado = df_geral[(df_geral['status'] == 'Pendente') & (df_geral['data'] < data_inicio_mes_selecionado) & (df_geral['tipo'] == 'Saída')]
 
 # --- ABAS ---
 aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
 
 with aba_resumo:
+    # --- IMPLEMENTAÇÃO: CONTROLE DE ATRASADOS ---
+    if not df_atrasados_passado.empty:
+        total_atrasado = df_atrasados_passado['valor'].sum()
+        with st.expander(f"⚠️ CONTAS PENDENTES DE MESES ANTERIORES: R$ {total_atrasado:,.2f}", expanded=True):
+            for _, row in df_atrasados_passado.iterrows():
+                col_at1, col_at2 = st.columns([3, 1])
+                col_at1.write(f"**{row['descricao']}** ({row['data'].strftime('%d/%m/%y')})")
+                if col_at2.button("✔ Pagar", key=f"pay_at_{row['id']}"):
+                    supabase.table("transacoes").update({"status": "Pago"}).eq("id", row['id']).execute()
+                    st.session_state.dados = buscar_dados(); st.rerun()
+
     if not df_mes.empty:
         entradas = df_mes[df_mes['tipo'] == 'Entrada']['valor'].sum()
         saidas_pagas = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pago')]['valor'].sum()
@@ -182,7 +200,15 @@ with aba_resumo:
         c2.metric("Gastos (Pagos)", f"R$ {saidas_pagas:,.2f}")
         c3.metric("Saldo Real", f"R$ {saldo_mes:,.2f}")
 
-        if saidas_pendentes > 0: st.warning(f"⚠️ R$ {saidas_pendentes:,.2f} pendentes este mês.")
+        # --- IMPLEMENTAÇÃO: CALENDÁRIO DE PAGAMENTOS ---
+        df_cal = df_mes[df_mes['tipo'] == 'Saída'].copy()
+        if not df_cal.empty:
+            df_cal['dia'] = df_cal['data'].dt.day
+            gastos_dia = df_cal.groupby('dia')['valor'].sum().reset_index()
+            fig_cal = px.bar(gastos_dia, x='dia', y='valor', title="Calendário de Saídas (Dia do Mês)",
+                             labels={'dia': 'Dia', 'valor': 'Total R$'}, color_discrete_sequence=['#3B82F6'])
+            fig_cal.update_layout(height=220, margin=dict(t=30, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+            st.plotly_chart(fig_cal, use_container_width=True)
 
         if st.session_state.metas:
             with st.expander("🎯 Status das Metas"):
@@ -199,6 +225,15 @@ with aba_resumo:
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
             s_text = row.get('status', 'Pago')
             s_color, s_bg = ("#10B981", "#D1FAE5") if s_text == "Pago" else ("#F59E0B", "#FEF3C7")
+            
+            # --- IMPLEMENTAÇÃO: ACOMPANHAMENTO POR VENCIMENTO ---
+            txt_venc = ""
+            if s_text == "Pendente" and row['tipo'] == "Saída":
+                dias_diff = (row['data'].date() - hoje).days
+                if dias_diff < 0:
+                    txt_venc = f" <span class='vencimento-alerta'>Atrasada há {-dias_diff} dias</span>"
+                elif dias_diff == 0:
+                    txt_venc = f" <span class='vencimento-alerta' style='color:#F59E0B'>Vence Hoje!</span>"
 
             st.markdown(f"""
                 <div class="transaction-card">
@@ -206,7 +241,7 @@ with aba_resumo:
                         <div class="card-icon">{icon}</div>
                         <div>
                             <div style="font-weight: 600; color: #1E293B;">{row["descricao"]}</div>
-                            <div style="font-size: 11px; color: #64748B;">{row["data"].strftime('%d %b')}</div>
+                            <div style="font-size: 11px; color: #64748B;">{row["data"].strftime('%d %b')}{txt_venc}</div>
                             <div class="status-badge" style="background: {s_bg}; color: {s_color};">{s_text}</div>
                         </div>
                     </div>
@@ -235,7 +270,7 @@ with aba_novo:
             v = st.number_input("Valor", min_value=0.0); d = st.text_input("Descrição")
             t = st.radio("Tipo", ["Saída", "Entrada"], horizontal=True)
             stat = st.selectbox("Status", ["Pago", "Pendente"])
-            c = st.selectbox("Categoria", CATEGORIAS); dt = st.date_input("Data", date.today())
+            c = st.selectbox("Categoria", CATEGORIAS); dt = st.date_input("Data/Vencimento", date.today())
             fixo_check = st.checkbox("Salvar na lista de Fixos")
             if st.form_submit_button("Salvar"):
                 if v > 0:
@@ -265,7 +300,6 @@ with aba_novo:
         else: st.caption("Sem fixos configurados.")
 
 with aba_metas:
-    st.info("💡 Exemplo: Defina R$ 1.000,00 para '🛒 Mercado'.")
     for cat in CATEGORIAS:
         if cat != "💰 Salário":
             atual_m = float(st.session_state.metas.get(cat, 0))
@@ -283,7 +317,6 @@ with aba_reserva:
         st.plotly_chart(px.line(mensal, title="Evolução Financeira"), use_container_width=True)
 
 with aba_sonhos:
-    st.info("💡 Exemplo: Comprar um carro, uma viagem...")
     v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
     if v_sonho > 0:
         try:
@@ -294,4 +327,4 @@ with aba_sonhos:
                 m_f = int(v_sonho / sobra_m) + 1
                 st.info(f"Faltam aprox. **{m_f} meses**."); st.progress(min(max(balanco/v_sonho, 0.0), 1.0))
             else: st.warning("Economize este mês para alimentar seu sonho!")
-        except: st.info("Dados insuficientes.")
+        except: st.info("Projeção indisponível no momento.")
