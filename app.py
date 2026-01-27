@@ -55,24 +55,24 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÕES DE BANCO DE DADOS (COM CORREÇÃO PARA KEYERROR) ---
+# --- FUNÇÕES DE BANCO DE DADOS ---
 def buscar_dados():
     res = supabase.table("transacoes").select("*").execute()
     df = pd.DataFrame(res.data)
     
-    # Se o banco estiver vazio, criamos um DataFrame com as colunas esperadas
-    if df.empty:
-        return pd.DataFrame(columns=['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status'])
+    # Colunas padrão para evitar KeyError se o banco estiver vazio
+    colunas = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status']
     
-    # Se não estiver vazio, processamos as datas
+    if df.empty:
+        return pd.DataFrame(columns=colunas)
+    
     df['data'] = pd.to_datetime(df['data'])
     
-    # Garante que a coluna status existe (caso tenha acabado de criar no SQL)
+    # Garante que a coluna status existe no DataFrame (retrocompatibilidade)
     if 'status' not in df.columns:
         df['status'] = 'Pago'
         
     return df
-
 
 def buscar_metas():
     res = supabase.table("metas").select("*").execute()
@@ -82,6 +82,7 @@ def buscar_fixos():
     res = supabase.table("fixos").select("*").execute()
     return pd.DataFrame(res.data)
 
+# Sincronização Inicial
 if 'dados' not in st.session_state: st.session_state.dados = buscar_dados()
 if 'metas' not in st.session_state: st.session_state.metas = buscar_metas()
 if 'fixos' not in st.session_state: st.session_state.fixos = buscar_fixos()
@@ -97,24 +98,53 @@ mes_nome = c_m.selectbox("Mês", meses, index=hoje.month - 1)
 ano_ref = c_a.number_input("Ano", value=hoje.year, step=1)
 mes_num = meses.index(mes_nome) + 1
 
+# --- PROCESSAMENTO DE DADOS (CORREÇÃO DE NameError E INICIALIZAÇÃO) ---
 df_geral = st.session_state.dados.copy()
-if not df_geral.empty:
-    total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum()
-    total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
-    balanco = total_in - total_out_pagas
-else:
-    total_in = 0.0
-    total_out_pagas = 0.0
-    balanco = 0.0
 
+# Inicializamos DataFrames vazios com as colunas corretas para evitar erros
+colunas_trans = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status']
+df_mes = pd.DataFrame(columns=colunas_trans)
+df_ant = pd.DataFrame(columns=colunas_trans)
+total_in = 0.0
+total_out_pagas = 0.0
+balanco = 0.0
+
+if not df_geral.empty:
+    # Cálculos Globais de Patrimônio (Regra: Desconta apenas o que foi Pago)
+    total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum()
+    # Caso a coluna status ainda não exista fisicamente no banco, tratamos como Pago
+    status_col = 'status' if 'status' in df_geral.columns else None
+    
+    if status_col:
+        total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
+    else:
+        total_out_pagas = df_geral[df_geral['tipo'] == 'Saída']['valor'].sum()
+        
+    balanco = total_in - total_out_pagas
+    
+    # Filtro do Mês Selecionado
+    df_mes = df_geral[(df_geral['data'].dt.month == mes_num) & (df_geral['data'].dt.year == ano_ref)]
+    
+    # Mês Anterior para Gráficos
+    mes_ant_num = 12 if mes_num == 1 else mes_num - 1
+    ano_ant_num = ano_ref - 1 if mes_num == 1 else ano_ref
+    df_ant = df_geral[(df_geral['data'].dt.month == mes_ant_num) & (df_geral['data'].dt.year == ano_ant_num)]
+
+# --- ABAS ---
 aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
 
 with aba_resumo:
     if not df_mes.empty:
-        # LÓGICA DE SALDO REAL: Apenas subtrai Saídas se status == 'Pago'
         entradas = df_mes[df_mes['tipo'] == 'Entrada']['valor'].sum()
-        saidas_pagas = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pago')]['valor'].sum()
-        saidas_pendentes = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pendente')]['valor'].sum()
+        
+        # Lógica de Saldo Real (Apenas Saídas Pagas)
+        if 'status' in df_mes.columns:
+            saidas_pagas = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pago')]['valor'].sum()
+            saidas_pendentes = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pendente')]['valor'].sum()
+        else:
+            saidas_pagas = df_mes[df_mes['tipo'] == 'Saída']['valor'].sum()
+            saidas_pendentes = 0.0
+            
         saldo_mes = entradas - saidas_pagas
 
         c1, c2, c3 = st.columns(3)
@@ -127,7 +157,12 @@ with aba_resumo:
 
         if st.session_state.metas:
             with st.expander("🎯 Status das Metas"):
-                gastos_cat = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pago')].groupby('categoria')['valor'].sum()
+                # Metas baseadas em gastos efetivados (Pagos)
+                base_gastos = df_mes[df_mes['tipo'] == 'Saída']
+                if 'status' in base_gastos.columns:
+                    base_gastos = base_gastos[base_gastos['status'] == 'Pago']
+                
+                gastos_cat = base_gastos.groupby('categoria')['valor'].sum()
                 for cat, lim in st.session_state.metas.items():
                     if lim > 0:
                         atual = gastos_cat.get(cat, 0)
@@ -138,6 +173,8 @@ with aba_resumo:
         for idx, row in df_mes.sort_values(by='data', ascending=False).iterrows():
             cor = "#10B981" if row['tipo'] == "Entrada" else "#EF4444"
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
+            
+            # Badge de Status Visual
             s_text = row.get('status', 'Pago')
             s_color = "#10B981" if s_text == "Pago" else "#F59E0B"
             s_bg = "#D1FAE5" if s_text == "Pago" else "#FEF3C7"
@@ -156,7 +193,6 @@ with aba_resumo:
                 </div>
             """, unsafe_allow_html=True)
             
-            # BOTÕES DE AÇÃO
             col_pago, col_del = st.columns([1, 1])
             with col_pago:
                 if s_text == "Pendente":
@@ -186,7 +222,14 @@ with aba_novo:
             dt = st.date_input("Data", date.today())
             if st.form_submit_button("Salvar"):
                 if v > 0:
-                    supabase.table("transacoes").insert({"data": str(dt), "descricao": d, "valor": v, "tipo": t, "categoria": c, "status": stat}).execute()
+                    supabase.table("transacoes").insert({
+                        "data": str(dt), 
+                        "descricao": d, 
+                        "valor": v, 
+                        "tipo": t, 
+                        "categoria": c, 
+                        "status": stat
+                    }).execute()
                     st.success(f"{t} cadastrada!")
                     st.session_state.dados = buscar_dados()
                     st.rerun()
@@ -199,7 +242,14 @@ with aba_novo:
                 col1.write(f"**{row['descricao']}** R$ {row['valor']:,.2f}")
                 if col2.button("Lançar", key=f"f_{idx}"):
                     d_f = str(date(ano_ref, mes_num, 1))
-                    supabase.table("transacoes").insert({"data": d_f, "descricao": row['descricao'], "valor": row['valor'], "tipo": "Saída", "categoria": row['categoria'], "status": "Pago"}).execute()
+                    supabase.table("transacoes").insert({
+                        "data": d_f, 
+                        "descricao": row['descricao'], 
+                        "valor": row['valor'], 
+                        "tipo": "Saída", 
+                        "categoria": row['categoria'], 
+                        "status": "Pago"
+                    }).execute()
                     st.session_state.dados = buscar_dados()
                     st.rerun()
         else: st.caption("Sem fixos cadastrados.")
@@ -217,10 +267,6 @@ with aba_metas:
                     st.rerun()
 
 with aba_reserva:
-    # Patrimônio REAL: Entradas - Saídas PAGAS
-    total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum()
-    total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
-    balanco = total_in - total_out_pagas
     st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.8;font-size:14px;">PATRIMÔNIO REAL</p><h2>R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
     
     if not df_geral.empty:
@@ -232,8 +278,17 @@ with aba_sonhos:
     st.markdown("### 🚀 Calculadora de Sonhos")
     v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
     if v_sonho > 0:
-        sobra_m = saldo_mes if saldo_mes > 0 else 0
+        # Tenta usar o saldo_mes calculado na aba_resumo, caso contrário 0
+        try:
+            entradas_sonho = df_mes[df_mes['tipo'] == 'Entrada']['valor'].sum()
+            saidas_sonho = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pago')]['valor'].sum()
+            sobra_m = entradas_sonho - saidas_sonho
+        except:
+            sobra_m = 0
+            
         if sobra_m > 0:
             m_f = int(v_sonho / sobra_m) + 1
             st.info(f"Faltam aprox. **{m_f} meses** com base no saldo atual.")
             st.progress(min(max(balanco/v_sonho, 0.0), 1.0))
+        else:
+            st.warning("Economize este mês para alimentar seu sonho!")
