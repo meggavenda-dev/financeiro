@@ -17,13 +17,15 @@ except Exception as e:
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Minha Casa", page_icon="🏡", layout="centered")
 
-# --- CONFIGURAÇÃO PARA APP INSTALÁVEL (ANDROID PWA) ---
+# --- FORÇAR ÍCONE DA CASINHA NO ANDROID (PWA) ---
 st.markdown("""
     <head>
+        <link rel="icon" href="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/1f3e1.png">
+        <link rel="apple-touch-icon" href="https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/1f3e1.png">
+        
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-        <link rel="manifest" href="manifest.json">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     </head>
     """, unsafe_allow_html=True)
 
