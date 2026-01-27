@@ -252,6 +252,10 @@ with aba_novo:
                 supabase.table("transacoes").insert({"data": str(dt), "descricao": d, "valor": v, "tipo": t, "categoria": c}).execute()
                 if fixo_check:
                     supabase.table("fixos").insert({"descricao": d, "valor": v, "categoria": c}).execute()
+
+                # MENSAGEM DE SUCESSO SOLICITADA
+                st.success(f"{t} cadastrada com sucesso!")
+                
                 st.session_state.dados = buscar_dados()
                 st.session_state.fixos = buscar_fixos()
                 st.rerun()
