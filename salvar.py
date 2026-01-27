@@ -17,7 +17,7 @@ except Exception as e:
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Minha Casa", page_icon="🏡", layout="centered")
 
-# CSS PREMIUM (Somente Aparência)
+# CSS PREMIUM (Somente Aparência + Botão de Excluir Sutil)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -82,16 +82,15 @@ st.markdown("""
         box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); margin-bottom: 25px;
     }
 
-    /* AJUSTE BOTÃO EXCLUIR PARA FICAR AO LADO */
-    .stButton.btn-excluir > button {
+    /* BOTÃO EXCLUIR SUTIL */
+    .btn-excluir > div > button {
         background-color: transparent !important;
         color: #EF4444 !important;
-        border: 1px solid #FEE2E2 !important;
-        padding: 5px !important;
-        font-size: 14px !important;
-        height: 40px !important;
-        width: 40px !important;
-        margin-top: 10px !important;
+        border: none !important;
+        font-size: 12px !important;
+        font-weight: 400 !important;
+        margin-top: -10px !important;
+        text-align: right !important;
     }
 
     /* UI CLEANUP */
@@ -155,10 +154,12 @@ with aba_resumo:
     if not df_mes.empty:
         entradas = df_mes[df_mes['tipo'] == 'Entrada']['valor'].sum()
         saidas = df_mes[df_mes['tipo'] == 'Saída']['valor'].sum()
+        saldo_mes = entradas - saidas
         
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         c1.metric("Ganhos", f"R$ {entradas:,.2f}")
         c2.metric("Gastos", f"R$ {saidas:,.2f}")
+        c3.metric("Saldo", f"R$ {saldo_mes:,.2f}", delta=saldo_mes, delta_color="normal")
 
         if not df_ant.empty:
             saidas_ant = df_ant[df_ant['tipo'] == 'Saída']['valor'].sum()
@@ -181,34 +182,34 @@ with aba_resumo:
             cor = "#10B981" if row['tipo'] == "Entrada" else "#EF4444"
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
             
-            # CRIANDO COLUNAS PARA ALINHAR ITEM E BOTÃO LADO A LADO
-            col_item, col_botao = st.columns([0.85, 0.15])
-            
-            with col_item:
-                st.markdown(f"""
-                    <div class="transaction-card">
-                        <div style="display: flex; align-items: center;">
-                            <div class="card-icon">{icon}</div>
-                            <div>
-                                <div style="font-weight: 600; color: #1E293B;">{row["descricao"]}</div>
-                                <div style="font-size: 11px; color: #64748B;">{row["data"].strftime('%d %b')}</div>
-                            </div>
+            # Card da transação
+            st.markdown(f"""
+                <div class="transaction-card">
+                    <div style="display: flex; align-items: center;">
+                        <div class="card-icon">{icon}</div>
+                        <div>
+                            <div style="font-weight: 600; color: #1E293B;">{row["descricao"]}</div>
+                            <div style="font-size: 11px; color: #64748B;">{row["data"].strftime('%d %b')}</div>
                         </div>
-                        <div style="color: {cor}; font-weight: 700;">R$ {row["valor"]:,.2f}</div>
                     </div>
-                """, unsafe_allow_html=True)
+                    <div style="color: {cor}; font-weight: 700;">R$ {row["valor"]:,.2f}</div>
+                </div>
+            """, unsafe_allow_html=True)
             
-            with col_botao:
+            # Botão de excluir sutil alinhado à direita
+            col_v, col_del = st.columns([4, 1])
+            with col_del:
                 st.markdown('<div class="btn-excluir">', unsafe_allow_html=True)
-                if st.button("🗑️", key=f"del_{row['id']}"):
+                if st.button("Excluir", key=f"del_{row['id']}"):
                     supabase.table("transacoes").delete().eq("id", row['id']).execute()
                     st.session_state.dados = buscar_dados()
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
     else:
         st.info("Toque em 'Novo' para começar!")
 
-# --- ABA NOVO (MANTIDA) ---
+# --- ABA NOVO ---
 with aba_novo:
     aba_unit, aba_fixo = st.tabs(["Lançamento Único", "🗓️ Fixos"])
     with aba_unit:
@@ -240,7 +241,7 @@ with aba_novo:
                     st.rerun()
         else: st.caption("Sem fixos cadastrados.")
 
-# --- ABA METAS (MANTIDA) ---
+# --- ABA METAS ---
 with aba_metas:
     for cat in CATEGORIAS:
         if cat != "💰 Salário":
@@ -252,7 +253,7 @@ with aba_metas:
                     st.session_state.metas = buscar_metas()
                     st.rerun()
 
-# --- ABA RESERVA (MANTIDA) ---
+# --- ABA RESERVA ---
 with aba_reserva:
     total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum() if not df_geral.empty else 0
     total_out = df_geral[df_geral['tipo'] == 'Saída']['valor'].sum() if not df_geral.empty else 0
@@ -267,7 +268,7 @@ with aba_reserva:
             fig_res.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_res, use_container_width=True)
 
-# --- ABA SONHOS (MANTIDA) ---
+# --- ABA SONHOS ---
 with aba_sonhos:
     st.markdown("### 🎯 Calculadora de Sonhos")
     v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
