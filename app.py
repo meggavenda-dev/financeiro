@@ -17,12 +17,14 @@ except Exception as e:
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Minha Casa", page_icon="🏡", layout="centered")
 
-# Injeção de Meta Tags para Android PWA
+# Injeção de Meta Tags para Android PWA e Ícone
 st.markdown(f"""
     <style>
-        /* Esconde o container do script para não aparecer espaço branco */
-        iframe[title="st.components.v1.html"] {{
-            display: none;
+        iframe[title="st.components.v1.html"] {{ display: none; }}
+        /* Badge de Status */
+        .status-badge {{
+            font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700;
+            text-transform: uppercase; margin-top: 4px; display: inline-block;
         }}
     </style>
     <link rel="shortcut icon" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
@@ -30,93 +32,24 @@ st.markdown(f"""
     <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
 """, unsafe_allow_html=True)
 
-# CSS PREMIUM ATUALIZADO
+# CSS PREMIUM
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     .stApp { background-color: #F8FAFC; }
-
-    .header-container {
-        text-align: center;
-        padding-bottom: 20px;
-    }
-    .main-title { 
-        background: linear-gradient(90deg, #1E293B, #3B82F6);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 700;
-        font-size: 2.5rem;
-        margin-bottom: 0px;
-    }
-    .slogan {
-        color: #64748B;
-        font-size: 1rem;
-        font-weight: 400;
-    }
-
-    .stTabs [data-baseweb="tab-list"] {
-        display: flex; justify-content: center; gap: 4px; width: 100%;
-        background-color: #E2E8F0; border-radius: 16px; padding: 4px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        flex-grow: 1; text-align: center; background-color: transparent;
-        border-radius: 12px; padding: 10px 2px !important; color: #64748B;
-        font-size: 13px; font-weight: 600; border: none !important;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #FFFFFF !important; color: #3B82F6 !important;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-    }
-
-    [data-testid="stMetric"] {
-        background-color: #FFFFFF; border-radius: 22px; padding: 15px;
-        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05); border: 1px solid #F1F5F9;
-    }
-
-    .stButton>button {
-        width: 100%; border-radius: 16px; background: #3B82F6;
-        color: white; border: none; padding: 12px; font-weight: 700;
-        transition: all 0.2s ease;
-    }
-    .stButton>button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
-
-    .transaction-card {
-        background-color: #FFFFFF; padding: 16px; border-radius: 20px;
-        margin-bottom: 0px; display: flex; justify-content: space-between;
-        align-items: center; border: 1px solid #F1F5F9;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-    }
-    .card-icon {
-        background: #F1F5F9; width: 40px; height: 40px; border-radius: 12px;
-        display: flex; align-items: center; justify-content: center; font-size: 18px;
-        margin-right: 12px;
-    }
-
-    .reserva-card {
-        background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
-        color: white; padding: 25px; border-radius: 24px; text-align: center;
-        box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); margin-bottom: 25px;
-    }
-
-    .meta-container {
-        background-color: #F1F5F9;
-        padding: 12px;
-        border-radius: 12px;
-        margin-bottom: 10px;
-    }
-
-    .btn-excluir > div > button {
-        background-color: transparent !important;
-        color: #EF4444 !important;
-        border: none !important;
-        font-size: 12px !important;
-        font-weight: 400 !important;
-        margin-top: -10px !important;
-        text-align: right !important;
-    }
-
+    .header-container { text-align: center; padding-bottom: 20px; }
+    .main-title { background: linear-gradient(90deg, #1E293B, #3B82F6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; font-size: 2.5rem; margin-bottom: 0px; }
+    .slogan { color: #64748B; font-size: 1rem; font-weight: 400; }
+    .stTabs [data-baseweb="tab-list"] { display: flex; justify-content: center; gap: 4px; width: 100%; background-color: #E2E8F0; border-radius: 16px; padding: 4px; }
+    .stTabs [data-baseweb="tab"] { flex-grow: 1; text-align: center; background-color: transparent; border-radius: 12px; padding: 10px 2px !important; color: #64748B; font-size: 13px; font-weight: 600; border: none !important; }
+    .stTabs [aria-selected="true"] { background-color: #FFFFFF !important; color: #3B82F6 !important; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+    [data-testid="stMetric"] { background-color: #FFFFFF; border-radius: 22px; padding: 15px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05); border: 1px solid #F1F5F9; }
+    .stButton>button { width: 100%; border-radius: 16px; background: #3B82F6; color: white; border: none; padding: 12px; font-weight: 700; transition: all 0.2s ease; }
+    .transaction-card { background-color: #FFFFFF; padding: 16px; border-radius: 20px; margin-bottom: 0px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #F1F5F9; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .card-icon { background: #F1F5F9; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; margin-right: 12px; }
+    .reserva-card { background: linear-gradient(135deg, #1E293B 0%, #334155 100%); color: white; padding: 25px; border-radius: 24px; text-align: center; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); margin-bottom: 25px; }
+    .btn-excluir > div > button { background-color: transparent !important; color: #EF4444 !important; border: none !important; font-size: 12px !important; font-weight: 400 !important; margin-top: -10px !important; text-align: right !important; }
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     .block-container { padding-top: 2rem !important; }
     </style>
@@ -128,6 +61,7 @@ def buscar_dados():
     df = pd.DataFrame(res.data)
     if not df.empty:
         df['data'] = pd.to_datetime(df['data'])
+        if 'status' not in df.columns: df['status'] = 'Pago'
     return df
 
 def buscar_metas():
@@ -138,22 +72,14 @@ def buscar_fixos():
     res = supabase.table("fixos").select("*").execute()
     return pd.DataFrame(res.data)
 
-if 'dados' not in st.session_state:
-    st.session_state.dados = buscar_dados()
-if 'metas' not in st.session_state:
-    st.session_state.metas = buscar_metas()
-if 'fixos' not in st.session_state:
-    st.session_state.fixos = buscar_fixos()
+if 'dados' not in st.session_state: st.session_state.dados = buscar_dados()
+if 'metas' not in st.session_state: st.session_state.metas = buscar_metas()
+if 'fixos' not in st.session_state: st.session_state.fixos = buscar_fixos()
 
 CATEGORIAS = ["🛒 Mercado", "🏠 Moradia", "🚗 Transporte", "🍕 Lazer", "💡 Contas", "💰 Salário", "✨ Outros"]
 meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
-st.markdown("""
-    <div class="header-container">
-        <div class="main-title">🏡 Financeiro</div>
-        <div class="slogan">Gestão inteligente para o seu lar</div>
-    </div>
-""", unsafe_allow_html=True)
+st.markdown("""<div class="header-container"><div class="main-title">🏡 Financeiro</div><div class="slogan">Gestão inteligente para o seu lar</div></div>""", unsafe_allow_html=True)
 
 hoje = date.today()
 c_m, c_a = st.columns([2, 1])
@@ -168,49 +94,43 @@ if not df_geral.empty:
     ano_ant = ano_ref - 1 if mes_num == 1 else ano_ref
     df_ant = df_geral[(df_geral['data'].dt.month == mes_ant) & (df_geral['data'].dt.year == ano_ant)]
 else:
-    df_mes = pd.DataFrame()
-    df_ant = pd.DataFrame()
+    df_mes, df_ant = pd.DataFrame(), pd.DataFrame()
 
 aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
 
 with aba_resumo:
     if not df_mes.empty:
+        # LÓGICA DE SALDO REAL: Apenas subtrai Saídas se status == 'Pago'
         entradas = df_mes[df_mes['tipo'] == 'Entrada']['valor'].sum()
-        saidas = df_mes[df_mes['tipo'] == 'Saída']['valor'].sum()
-        saldo_mes = entradas - saidas
+        saidas_pagas = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pago')]['valor'].sum()
+        saidas_pendentes = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pendente')]['valor'].sum()
+        saldo_mes = entradas - saidas_pagas
+
         c1, c2, c3 = st.columns(3)
         c1.metric("Ganhos", f"R$ {entradas:,.2f}")
-        c2.metric("Gastos", f"R$ {saidas:,.2f}")
-        c3.metric("Saldo", f"R$ {saldo_mes:,.2f}", delta=saldo_mes, delta_color="normal")
+        c2.metric("Gastos (Pagos)", f"R$ {saidas_pagas:,.2f}")
+        c3.metric("Saldo Real", f"R$ {saldo_mes:,.2f}")
 
-        if not df_ant.empty:
-            saidas_ant = df_ant[df_ant['tipo'] == 'Saída']['valor'].sum()
-            fig_comp = px.bar(x=[meses[mes_ant-1], mes_nome], y=[saidas_ant, saidas], 
-                              color_discrete_sequence=["#CBD5E0", "#3B82F6"])
-            fig_comp.update_layout(height=230, showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=10, b=0, l=0, r=0))
-            st.plotly_chart(fig_comp, use_container_width=True)
+        if saidas_pendentes > 0:
+            st.warning(f"⚠️ R$ {saidas_pendentes:,.2f} pendentes de pagamento este mês.")
 
         if st.session_state.metas:
             with st.expander("🎯 Status das Metas"):
-                gastos_cat = df_mes[df_mes['tipo'] == 'Saída'].groupby('categoria')['valor'].sum()
+                gastos_cat = df_mes[(df_mes['tipo'] == 'Saída') & (df_mes['status'] == 'Pago')].groupby('categoria')['valor'].sum()
                 for cat, lim in st.session_state.metas.items():
                     if lim > 0:
                         atual = gastos_cat.get(cat, 0)
-                        porcentagem = min(atual/lim, 1.0)
-                        st.markdown(f"""
-                            <div class="meta-container">
-                                <div style="display: flex; justify-content: space-between; font-size: 14px;">
-                                    <b>{cat}</b>
-                                    <span>R$ {atual:,.0f} de R$ {lim:,.0f}</span>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        st.progress(porcentagem)
+                        st.markdown(f'<div class="meta-container"><b>{cat}</b> (R$ {atual:,.0f} / {lim:,.0f})</div>', unsafe_allow_html=True)
+                        st.progress(min(atual/lim, 1.0))
 
         st.markdown(f"### Histórico")
         for idx, row in df_mes.sort_values(by='data', ascending=False).iterrows():
             cor = "#10B981" if row['tipo'] == "Entrada" else "#EF4444"
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
+            s_text = row.get('status', 'Pago')
+            s_color = "#10B981" if s_text == "Pago" else "#F59E0B"
+            s_bg = "#D1FAE5" if s_text == "Pago" else "#FEF3C7"
+
             st.markdown(f"""
                 <div class="transaction-card">
                     <div style="display: flex; align-items: center;">
@@ -218,12 +138,21 @@ with aba_resumo:
                         <div>
                             <div style="font-weight: 600; color: #1E293B;">{row["descricao"]}</div>
                             <div style="font-size: 11px; color: #64748B;">{row["data"].strftime('%d %b')}</div>
+                            <div class="status-badge" style="background: {s_bg}; color: {s_color};">{s_text}</div>
                         </div>
                     </div>
                     <div style="color: {cor}; font-weight: 700;">R$ {row["valor"]:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
-            col_v, col_del = st.columns([4, 1])
+            
+            # BOTÕES DE AÇÃO
+            col_pago, col_del = st.columns([1, 1])
+            with col_pago:
+                if s_text == "Pendente":
+                    if st.button("✔ Pagar", key=f"pay_{row['id']}"):
+                        supabase.table("transacoes").update({"status": "Pago"}).eq("id", row['id']).execute()
+                        st.session_state.dados = buscar_dados()
+                        st.rerun()
             with col_del:
                 st.markdown('<div class="btn-excluir">', unsafe_allow_html=True)
                 if st.button("Excluir", key=f"del_{row['id']}"):
@@ -232,8 +161,7 @@ with aba_resumo:
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
-    else:
-        st.info("Toque em 'Novo' para começar!")
+    else: st.info("Toque em 'Novo' para começar!")
 
 with aba_novo:
     aba_unit, aba_fixo = st.tabs(["Lançamento Único", "🗓️ Fixos"])
@@ -242,37 +170,31 @@ with aba_novo:
             v = st.number_input("Valor", min_value=0.0)
             d = st.text_input("Descrição")
             t = st.radio("Tipo", ["Saída", "Entrada"], horizontal=True)
+            stat = st.selectbox("Status", ["Pago", "Pendente"])
             c = st.selectbox("Categoria", CATEGORIAS)
             dt = st.date_input("Data", date.today())
-            fixo_check = st.checkbox("Salvar como Fixo")
             if st.form_submit_button("Salvar"):
-                # IMPLEMENTAÇÃO SOLICITADA: Bloqueio de valor zero
                 if v > 0:
-                    supabase.table("transacoes").insert({"data": str(dt), "descricao": d, "valor": v, "tipo": t, "categoria": c}).execute()
-                    if fixo_check:
-                        supabase.table("fixos").insert({"descricao": d, "valor": v, "categoria": c}).execute()
-                    st.success(f"{t} cadastrada com sucesso!")
+                    supabase.table("transacoes").insert({"data": str(dt), "descricao": d, "valor": v, "tipo": t, "categoria": c, "status": stat}).execute()
+                    st.success(f"{t} cadastrada!")
                     st.session_state.dados = buscar_dados()
-                    st.session_state.fixos = buscar_fixos()
                     st.rerun()
-                else:
-                    st.error("O valor do lançamento deve ser maior que zero.")
+                else: st.error("O valor deve ser maior que zero.")
 
     with aba_fixo:
         if not st.session_state.fixos.empty:
             for idx, row in st.session_state.fixos.iterrows():
                 col1, col2 = st.columns([3, 1])
                 col1.write(f"**{row['descricao']}** R$ {row['valor']:,.2f}")
-                if col2.button("OK", key=f"f_{idx}"):
+                if col2.button("Lançar", key=f"f_{idx}"):
                     d_f = str(date(ano_ref, mes_num, 1))
-                    supabase.table("transacoes").insert({"data": d_f, "descricao": row['descricao'], "valor": row['valor'], "tipo": "Saída", "categoria": row['categoria']}).execute()
+                    supabase.table("transacoes").insert({"data": d_f, "descricao": row['descricao'], "valor": row['valor'], "tipo": "Saída", "categoria": row['categoria'], "status": "Pago"}).execute()
                     st.session_state.dados = buscar_dados()
-                    st.toast("Lançado!")
                     st.rerun()
         else: st.caption("Sem fixos cadastrados.")
 
 with aba_metas:
-    st.info("💡 Exemplo: Defina R$ 1.000,00 para '🛒 Mercado' para controlar seus gastos essenciais.")
+    st.info("💡 Exemplo: Defina R$ 1.000,00 para '🛒 Mercado'.")
     for cat in CATEGORIAS:
         if cat != "💰 Salário":
             atual_m = float(st.session_state.metas.get(cat, 0))
@@ -284,29 +206,23 @@ with aba_metas:
                     st.rerun()
 
 with aba_reserva:
-    total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum() if not df_geral.empty else 0
-    total_out = df_geral[df_geral['tipo'] == 'Saída']['valor'].sum() if not df_geral.empty else 0
-    balanco = total_in - total_out
-    st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.8;font-size:14px;">PATRIMÔNIO ACUMULADO</p><h2>R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
+    # Patrimônio REAL: Entradas - Saídas PAGAS
+    total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum()
+    total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
+    balanco = total_in - total_out_pagas
+    st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.8;font-size:14px;">PATRIMÔNIO REAL</p><h2>R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
+    
     if not df_geral.empty:
         df_geral['MesAno'] = df_geral['data'].dt.to_period('M').astype(str)
         mensal = df_geral.groupby(['MesAno', 'tipo'])['valor'].sum().unstack(fill_value=0)
-        if 'Entrada' in mensal and 'Saída' in mensal:
-            fig_res = px.line(mensal, y=mensal['Entrada'] - mensal['Saída'], title="Saúde Financeira Mensal", markers=True)
-            fig_res.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig_res, use_container_width=True)
+        st.plotly_chart(px.line(mensal, title="Evolução Financeira"), use_container_width=True)
 
 with aba_sonhos:
-    st.markdown("### 🎯 Calculadora de Sonhos")
-    st.info("💡 Exemplo: 'Viagem de Férias' ou 'Troca de Carro'.")
+    st.markdown("### 🚀 Calculadora de Sonhos")
     v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
-    if not df_geral.empty and v_sonho > 0:
-        df_geral['MesAno'] = df_geral['data'].dt.to_period('M').astype(str)
-        bal_m = df_geral.groupby(['MesAno', 'tipo'])['valor'].sum().unstack(fill_value=0)
-        if 'Entrada' in bal_m and 'Saída' in bal_m:
-            sobra_m = (bal_m['Entrada'] - bal_m['Saída']).mean()
-            if sobra_m > 0:
-                m_f = int(v_sonho / sobra_m) + 1
-                st.info(f"Com uma sobra média de R$ {sobra_m:,.2f}, faltam aprox. **{m_f} meses**.")
-                st.progress(min(max(balanco/v_sonho, 0.0), 1.0))
-            else: st.warning("Sua sobra média está negativa.")
+    if v_sonho > 0:
+        sobra_m = saldo_mes if saldo_mes > 0 else 0
+        if sobra_m > 0:
+            m_f = int(v_sonho / sobra_m) + 1
+            st.info(f"Faltam aprox. **{m_f} meses** com base no saldo atual.")
+            st.progress(min(max(balanco/v_sonho, 0.0), 1.0))
