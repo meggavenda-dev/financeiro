@@ -43,17 +43,23 @@ FIXO_FILE = "gastos_fixos.csv"
 
 def carregar_dados(file, columns):
     if os.path.exists(file):
-        df = pd.read_csv(file)
-        if 'Data' in df.columns: df['Data'] = pd.to_datetime(df['Data'])
-        return df
+        try:
+            df = pd.read_csv(file)
+            if 'Data' in df.columns:
+                df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
+            return df
+        except:
+            return pd.DataFrame(columns=columns)
     return pd.DataFrame(columns=columns)
 
-# Inicialização
+# Inicialização da Sessão
 if 'dados' not in st.session_state:
     st.session_state.dados = carregar_dados(DB_FILE, ['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
 if 'metas' not in st.session_state:
     if os.path.exists(META_FILE):
-        st.session_state.metas = pd.read_csv(META_FILE, index_col='Categoria').to_dict()['Limite']
+        try:
+            st.session_state.metas = pd.read_csv(META_FILE, index_col='Categoria').to_dict()['Limite']
+        except: st.session_state.metas = {}
     else: st.session_state.metas = {}
 if 'fixos' not in st.session_state:
     st.session_state.fixos = carregar_dados(FIXO_FILE, ['Descrição', 'Valor', 'Categoria'])
@@ -70,14 +76,22 @@ mes_nome = c_m.selectbox("Mês", meses, index=hoje.month - 1)
 ano_ref = c_a.number_input("Ano", value=hoje.year, step=1)
 mes_num = meses.index(mes_nome) + 1
 
-# Filtragem de Mês Atual e Anterior
+# --- PROCESSAMENTO DE DATAS SEGURO ---
 df_geral = st.session_state.dados.copy()
-df_mes = df_geral[(df_geral['Data'].dt.month == mes_num) & (df_geral['Data'].dt.year == ano_ref)]
+# Garantir que a coluna 'Data' seja datetime antes de filtrar
+if not df_geral.empty:
+    df_geral['Data'] = pd.to_datetime(df_geral['Data'])
+    df_mes = df_geral[(df_geral['Data'].dt.month == mes_num) & (df_geral['Data'].dt.year == ano_ref)]
+else:
+    df_mes = pd.DataFrame(columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
 
 # Cálculo Mês Anterior para Comparativo
 mes_ant = 12 if mes_num == 1 else mes_num - 1
 ano_ant = ano_ref - 1 if mes_num == 1 else ano_ref
-df_ant = df_geral[(df_geral['Data'].dt.month == mes_ant) & (df_geral['Data'].dt.year == ano_ant)]
+if not df_geral.empty:
+    df_ant = df_geral[(df_geral['Data'].dt.month == mes_ant) & (df_geral['Data'].dt.year == ano_ant)]
+else:
+    df_ant = pd.DataFrame()
 
 aba_resumo, aba_novo, aba_metas, aba_reserva = st.tabs(["✨ Meu Mês", "➕ Novo", "🎯 Metas", "🏦 Reserva"])
 
@@ -129,7 +143,7 @@ with aba_novo:
     
     with aba_unit:
         with st.form("form_novo", clear_on_submit=True):
-            v = st.number_input("Valor", min_value=0.0)
+            v = st.number_input("Valor", min_value=0.0, step=0.01)
             d = st.text_input("Descrição")
             t = st.radio("Tipo", ["Saída", "Entrada"], horizontal=True)
             c = st.selectbox("Categoria", CATEGORIAS, key="cat_unit")
@@ -137,14 +151,15 @@ with aba_novo:
             fixo = st.checkbox("Salvar como Gasto Fixo (Recorrente)")
             
             if st.form_submit_button("Salvar"):
-                novo = pd.DataFrame([[pd.to_datetime(dt), d, v, t, c]], columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
-                st.session_state.dados = pd.concat([st.session_state.dados, novo], ignore_index=True)
-                st.session_state.dados.to_csv(DB_FILE, index=False)
-                if fixo:
-                    novo_fixo = pd.DataFrame([[d, v, c]], columns=['Descrição', 'Valor', 'Categoria'])
-                    st.session_state.fixos = pd.concat([st.session_state.fixos, novo_fixo], ignore_index=True).drop_duplicates()
-                    st.session_state.fixos.to_csv(FIXO_FILE, index=False)
-                st.rerun()
+                if d and v > 0:
+                    novo = pd.DataFrame([[pd.to_datetime(dt), d, v, t, c]], columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
+                    st.session_state.dados = pd.concat([st.session_state.dados, novo], ignore_index=True)
+                    st.session_state.dados.to_csv(DB_FILE, index=False)
+                    if fixo:
+                        novo_fixo = pd.DataFrame([[d, v, c]], columns=['Descrição', 'Valor', 'Categoria'])
+                        st.session_state.fixos = pd.concat([st.session_state.fixos, novo_fixo], ignore_index=True).drop_duplicates()
+                        st.session_state.fixos.to_csv(FIXO_FILE, index=False)
+                    st.rerun()
 
     with aba_fixo:
         st.markdown("### Seus Gastos Recorrentes")
@@ -153,11 +168,15 @@ with aba_novo:
                 col1, col2 = st.columns([3, 1])
                 col1.write(f"**{row['Descrição']}** - R$ {row['Valor']:,.2f}")
                 if col2.button("Lançar", key=f"fixo_{idx}"):
+                    # Lança no dia 1 do mês selecionado no topo
                     d_fixa = pd.to_datetime(date(ano_ref, mes_num, 1))
                     n = pd.DataFrame([[d_fixa, row['Descrição'], row['Valor'], "Saída", row['Categoria']]], columns=['Data', 'Descrição', 'Valor', 'Tipo', 'Categoria'])
                     st.session_state.dados = pd.concat([st.session_state.dados, n], ignore_index=True)
                     st.session_state.dados.to_csv(DB_FILE, index=False)
                     st.toast(f"{row['Descrição']} lançado!")
+                    st.rerun()
+            
+            st.divider()
             if st.button("Limpar Lista de Fixos"):
                 if os.path.exists(FIXO_FILE): os.remove(FIXO_FILE)
                 st.session_state.fixos = pd.DataFrame(columns=['Descrição', 'Valor', 'Categoria'])
@@ -166,6 +185,7 @@ with aba_novo:
 
 # --- ABA METAS ---
 with aba_metas:
+    st.markdown("### 🎯 Definir Orçamentos")
     for cat in CATEGORIAS:
         if cat != "💰 Salário":
             st.session_state.metas[cat] = st.number_input(f"Meta {cat}", min_value=0.0, value=float(st.session_state.metas.get(cat, 0)))
@@ -175,27 +195,31 @@ with aba_metas:
 
 # --- ABA RESERVA (ECONOMIA ACUMULADA) ---
 with aba_reserva:
-    total_in = df_geral[df_geral['Tipo'] == 'Entrada']['Valor'].sum()
-    total_out = df_geral[df_geral['Tipo'] == 'Saída']['Valor'].sum()
-    balanco = total_in - total_out
-    
-    st.markdown(f"""
-        <div class="reserva-card">
-            <p style='margin:0; opacity:0.8;'>Patrimônio Acumulado (Sobras)</p>
-            <h2 style='margin:0; color:white;'>R$ {balanco:,.2f}</h2>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.write("### 📈 Evolução do Balanço")
     if not df_geral.empty:
+        total_in = df_geral[df_geral['Tipo'] == 'Entrada']['Valor'].sum()
+        total_out = df_geral[df_geral['Tipo'] == 'Saída']['Valor'].sum()
+        balanco = total_in - total_out
+        
+        st.markdown(f"""
+            <div class="reserva-card">
+                <p style='margin:0; opacity:0.8;'>Patrimônio Acumulado (Sobras)</p>
+                <h2 style='margin:0; color:white;'>R$ {balanco:,.2f}</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.write("### 📈 Evolução do Balanço")
         df_geral['MesAno'] = df_geral['Data'].dt.to_period('M').astype(str)
         resumo_mes = df_geral.groupby(['MesAno', 'Tipo'])['Valor'].sum().unstack(fill_value=0)
+        
         if 'Entrada' in resumo_mes and 'Saída' in resumo_mes:
             resumo_mes['Sobra'] = resumo_mes['Entrada'] - resumo_mes['Saída']
             st.line_chart(resumo_mes['Sobra'])
+        else:
+            st.info("Dados insuficientes para gerar o gráfico de evolução.")
+    else:
+        st.info("Nenhum dado registrado para calcular a reserva.")
 
-
-
+    st.divider()
     if st.button("🚨 Resetar Tudo"):
         for f in [DB_FILE, META_FILE, FIXO_FILE]:
             if os.path.exists(f): os.remove(f)
