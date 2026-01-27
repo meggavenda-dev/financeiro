@@ -303,6 +303,8 @@ with aba_reserva:
     # GRÁFICO REMOVIDO DA ABA CAIXA (RESERVA)
 
 with aba_sonhos:
+    st.markdown("### 🎯 Calculadora de Sonhos")
+    st.info("💡 Exemplo: 'Viagem de Férias' ou 'Troca de Carro'.")
     v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
     if v_sonho > 0:
         try:
