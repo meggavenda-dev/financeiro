@@ -55,14 +55,24 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÕES DE BANCO DE DADOS ---
+# --- FUNÇÕES DE BANCO DE DADOS (COM CORREÇÃO PARA KEYERROR) ---
 def buscar_dados():
     res = supabase.table("transacoes").select("*").execute()
     df = pd.DataFrame(res.data)
-    if not df.empty:
-        df['data'] = pd.to_datetime(df['data'])
-        if 'status' not in df.columns: df['status'] = 'Pago'
+    
+    # Se o banco estiver vazio, criamos um DataFrame com as colunas esperadas
+    if df.empty:
+        return pd.DataFrame(columns=['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status'])
+    
+    # Se não estiver vazio, processamos as datas
+    df['data'] = pd.to_datetime(df['data'])
+    
+    # Garante que a coluna status existe (caso tenha acabado de criar no SQL)
+    if 'status' not in df.columns:
+        df['status'] = 'Pago'
+        
     return df
+
 
 def buscar_metas():
     res = supabase.table("metas").select("*").execute()
@@ -89,12 +99,13 @@ mes_num = meses.index(mes_nome) + 1
 
 df_geral = st.session_state.dados.copy()
 if not df_geral.empty:
-    df_mes = df_geral[(df_geral['data'].dt.month == mes_num) & (df_geral['data'].dt.year == ano_ref)]
-    mes_ant = 12 if mes_num == 1 else mes_num - 1
-    ano_ant = ano_ref - 1 if mes_num == 1 else ano_ref
-    df_ant = df_geral[(df_geral['data'].dt.month == mes_ant) & (df_geral['data'].dt.year == ano_ant)]
+    total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum()
+    total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
+    balanco = total_in - total_out_pagas
 else:
-    df_mes, df_ant = pd.DataFrame(), pd.DataFrame()
+    total_in = 0.0
+    total_out_pagas = 0.0
+    balanco = 0.0
 
 aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
 
