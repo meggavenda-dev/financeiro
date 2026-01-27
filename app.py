@@ -17,7 +17,7 @@ except Exception as e:
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Minha Casa", page_icon="🏡", layout="centered")
 
-# CSS PREMIUM (Somente Aparência)
+# CSS PREMIUM (Somente Aparência + Botão de Excluir Sutil)
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -65,7 +65,7 @@ st.markdown("""
     /* TRANSACTION CARDS (Wallet Style) */
     .transaction-card {
         background-color: #FFFFFF; padding: 16px; border-radius: 20px;
-        margin-bottom: 10px; display: flex; justify-content: space-between;
+        margin-bottom: 0px; display: flex; justify-content: space-between;
         align-items: center; border: 1px solid #F1F5F9;
         box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     }
@@ -80,6 +80,17 @@ st.markdown("""
         background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
         color: white; padding: 25px; border-radius: 24px; text-align: center;
         box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); margin-bottom: 25px;
+    }
+
+    /* BOTÃO EXCLUIR SUTIL */
+    .btn-excluir > div > button {
+        background-color: transparent !important;
+        color: #EF4444 !important;
+        border: none !important;
+        font-size: 12px !important;
+        font-weight: 400 !important;
+        margin-top: -10px !important;
+        text-align: right !important;
     }
 
     /* UI CLEANUP */
@@ -168,6 +179,8 @@ with aba_resumo:
         for idx, row in df_mes.sort_values(by='data', ascending=False).iterrows():
             cor = "#10B981" if row['tipo'] == "Entrada" else "#EF4444"
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
+            
+            # Card da transação
             st.markdown(f"""
                 <div class="transaction-card">
                     <div style="display: flex; align-items: center;">
@@ -180,6 +193,17 @@ with aba_resumo:
                     <div style="color: {cor}; font-weight: 700;">R$ {row["valor"]:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
+            
+            # Botão de excluir sutil alinhado à direita
+            col_v, col_del = st.columns([4, 1])
+            with col_del:
+                st.markdown('<div class="btn-excluir">', unsafe_allow_html=True)
+                if st.button("Excluir", key=f"del_{row['id']}"):
+                    supabase.table("transacoes").delete().eq("id", row['id']).execute()
+                    st.session_state.dados = buscar_dados()
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
     else:
         st.info("Toque em 'Novo' para começar!")
 
