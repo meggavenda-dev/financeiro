@@ -5,6 +5,7 @@ from datetime import date
 from supabase import create_client, Client
 import io
 import streamlit.components.v1 as components
+import bcrypt
 
 # === NOVO: ReportLab para gerar PDF robusto (cabeçalho + paginação) ===
 from reportlab.lib.pagesizes import A4
