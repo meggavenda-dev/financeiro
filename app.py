@@ -11,44 +11,29 @@ import streamlit.components.v1 as components
 
 
 # ============================
+
+# --- Deixe True só 1x para (re)gravar a senha da "alynne", depois volte para False ---
+RUN_BOOTSTRAP = False
+
 import os, base64, hashlib
 
 def pbkdf2_hash(password: str, iterations: int = 260000) -> str:
-    """Gera hash no formato: pbkdf2_sha256$<iter>$<salt_b64>$<hash_b64>"""
-    salt = os.urandom(16)  # 128 bits
+    salt = os.urandom(16)
     dk   = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
-    return f"pbkdf2_sha256${iterations}$" \
-           f"{base64.b64encode(salt).decode()}$" \
-           f"{base64.b64encode(dk).decode()}"
-
-def pbkdf2_verify(password: str, stored: str) -> bool:
-    """Verifica a senha contra o hash guardado em stored."""
-    try:
-        algo, iter_s, salt_b64, hash_b64 = stored.split("$", 3)
-        if algo != "pbkdf2_sha256":
-            return False
-        iterations = int(iter_s)
-        salt = base64.b64decode(salt_b64.encode())
-        expected = base64.b64decode(hash_b64.encode())
-        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
-        return hashlib.compare_digest(dk, expected)
-    except Exception:
-        return False
-
-# --- Troque para True APENAS UMA VEZ para criar/atualizar a usuária "alynne"
-RUN_BOOTSTRAP = False
+    return f"pbkdf2_sha256${iterations}${base64.b64encode(salt).decode()}${base64.b64encode(dk).decode()}"
 
 if RUN_BOOTSTRAP:
     try:
         senha_hash = pbkdf2_hash("862721*")
-        # Usando a tabela e colunas que você tem: 'usuarios' com 'email', 'password_hash', 'nome'
+        # IMPORTANTE: tabela e colunas certas, e on_conflict no campo único (email)
         supabase.table("usuarios").upsert(
             {"email": "alynne", "password_hash": senha_hash, "nome": "Alynne"},
-            on_conflict="email"   # funciona por causa do índice único
+            on_conflict="email"
         ).execute()
         st.success("Usuária 'alynne' criada/atualizada com hash seguro.")
     except Exception as e:
-        st.error(f"Falha no bootstrap de usuário: {e}")
+        st.error(f"Falha no bootstrap: {e}")
+
 
 
 def fetch_user_by_email(email_login: str):
