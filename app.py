@@ -37,32 +37,27 @@ def login():
         pass_input = st.text_input("Senha", type="password")
         
         if st.button("Entrar"):
-    user_clean = user_input.strip()
-    pass_clean = pass_input.strip()
+            # Este bloco abaixo PRECISA estar recuado (4 espaços)
+            user_clean = user_input.strip()
+            pass_clean = pass_input.strip()
 
-    res = supabase.table("usuarios").select("nome, password_hash").eq("nome", user_clean).execute()
-    
-    if res.data:
-        # Pega o hash e garante que é uma string pura sem espaços
-        stored_hash = str(res.data[0]['password_hash']).strip()
-        
-        try:
-            # Converter a senha digitada e o hash do banco para bytes
-            check = bcrypt.checkpw(
-                pass_clean.encode('utf-8'), 
-                stored_hash.encode('utf-8')
-            )
+            res = supabase.table("usuarios").select("nome, password_hash").eq("nome", user_clean).execute()
             
-            if check:
-                st.session_state.logged_in = True
-                st.session_state.user_name = res.data[0]['nome']
-                st.rerun()
+            if res.data:
+                stored_hash = str(res.data[0]['password_hash']).strip()
+                
+                try:
+                    # O bloco try também precisa de recuo interno
+                    if bcrypt.checkpw(pass_clean.encode('utf-8'), stored_hash.encode('utf-8')):
+                        st.session_state.logged_in = True
+                        st.session_state.user_name = res.data[0]['nome']
+                        st.rerun()
+                    else:
+                        st.error("Senha incorreta.")
+                except Exception as e:
+                    st.error("Erro no formato do hash no banco.")
             else:
-                st.error("Senha incorreta.")
-        except Exception as e:
-            st.error(f"Erro técnico: O hash no banco não é compatível com Bcrypt.")
-    else:
-        st.error("Usuário não encontrado.")
+                st.error("Usuário não encontrado.")
 
 # Controle de sessão
 if 'logged_in' not in st.session_state:
