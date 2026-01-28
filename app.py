@@ -687,7 +687,7 @@ with aba_reserva:
 # ============================
 with aba_negociacao:
     st.markdown("### 🤝 Contas em Negociação")
-    st.info("💡 Exemplo: 'Acompanhamento de contas no status "Em negociação", sem previsão de pagamento'.")
+    st.info("💡 Acompanhamento de contas no status - Em negociação.")
     if st.session_state.dados.empty:
         st.info("Não há dados.")
     else:
