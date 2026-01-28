@@ -33,42 +33,29 @@ def inject_head_for_ios():
     (function(){
       try {
         const head = document.head;
-
         function add(tag, attrs){
           const el = document.createElement(tag);
           for (const [k,v] of Object.entries(attrs)) el.setAttribute(k, v);
           head.appendChild(el);
         }
-
-        // Remove metatags viewport preexistentes e insere uma adequada ao iOS
+        // Remove viewports existentes e aplica o ideal p/ iOS
         [...head.querySelectorAll('meta[name="viewport"]')].forEach(m => m.remove());
-        add('meta', {
-          name: 'viewport',
-          content: 'width=device-width, initial-scale=1, viewport-fit=cover, shrink-to-fit=no'
-        });
+        add('meta', { name:'viewport', content:'width=device-width, initial-scale=1, viewport-fit=cover, shrink-to-fit=no' });
 
-        // App-like em tela inicial (PWA light)
-        add('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' });
-        add('meta', { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' });
-        add('meta', { name: 'apple-mobile-web-app-title', content: 'Minha Casa' });
+        // PWA light no iOS
+        add('meta', { name:'apple-mobile-web-app-capable', content:'yes' });
+        add('meta', { name:'apple-mobile-web-app-status-bar-style', content:'black-translucent' });
+        add('meta', { name:'apple-mobile-web-app-title', content:'Minha Casa' });
 
-        // Evita auto link de telefones (iOS antigo)
-        add('meta', { name: 'format-detection', content: 'telephone=no' });
+        // Evita autolink de telefone em iOS antigo
+        add('meta', { name:'format-detection', content:'telephone=no' });
 
-        // Ícones (substitua por arquivos próprios se desejar)
+        // Ícones (substitua as URLs pelos seus se quiser)
         const icon180 = 'https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png';
-        const icon152 = icon180;
-        const icon120 = icon180;
-        const icon76  = icon180;
-
-        add('link', { rel:'apple-touch-icon', sizes:'180x180', href: icon180 });
-        add('link', { rel:'apple-touch-icon', sizes:'152x152', href: icon152 });
-        add('link', { rel:'apple-touch-icon', sizes:'120x120', href: icon120 });
-        add('link', { rel:'apple-touch-icon', sizes:'76x76',  href: icon76  });
-
-        // Favicon (fallback)
+        ['180x180','152x152','120x120','76x76'].forEach(size => {
+          add('link', { rel:'apple-touch-icon', sizes:size, href: icon180 });
+        });
         add('link', { rel:'icon', type:'image/png', href: icon180 });
-
       } catch (e) { console.warn('Head injection failed', e); }
     })();
     </script>
@@ -323,20 +310,18 @@ def gerar_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_exp = df.copy()
-        if not df_exp.empty and pd.api.types.is_datetime64_any_dtype(df_exp['data']):
-            df_exp['data'] = df_exp['data'].dt.strftime('%d/%m/%Y')
-        else:
-            df_exp['data'] = pd.to_datetime(df_exp['data'], errors='coerce').dt.strftime('%d/%m/%Y')
+        # Garante data formatada
+        df_exp['data'] = pd.to_datetime(df_exp['data'], errors='coerce').dt.strftime('%d/%m/%Y')
         df_exp.to_excel(writer, index=False, sheet_name='Lançamentos')
     return output.getvalue()
 
 def gerar_pdf(df, nome_mes):
     """
     Gera um PDF tabular com quebra de página, repetição de cabeçalho
-    e colunas dimensionadas para A4 retrato.
+    e colunas dimensionadas para A4 retrato. NÃO descarta linhas.
     """
+    # Se vier nulo ou vazio, gera um PDF informativo
     if df is None or df.empty:
-        # PDF mínimo informativo
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 16)
@@ -349,31 +334,41 @@ def gerar_pdf(df, nome_mes):
         except Exception:
             return pdf.output(dest="S").encode("latin-1", "replace")
 
-    # Sanitiza/garante tipos
+    # Cópia + sanitização sem excluir linhas
     df_exp = df.copy()
-    if not pd.api.types.is_datetime64_any_dtype(df_exp['data']):
+
+    # Normaliza tipos sem dropar: data->datetime (erros viram NaT, mas mantemos a linha)
+    if 'data' in df_exp.columns:
         df_exp['data'] = pd.to_datetime(df_exp['data'], errors='coerce')
-    df_exp['data_fmt'] = df_exp['data'].dt.strftime('%d/%m/%Y').fillna('')
+
+    # Colunas auxiliares
+    df_exp['data_fmt'] = df_exp['data'].dt.strftime('%d/%m/%Y')
+    df_exp['data_fmt'] = df_exp['data_fmt'].fillna('')  # se NaT, fica vazio
     df_exp['descricao'] = df_exp['descricao'].fillna('').astype(str)
     df_exp['valor'] = pd.to_numeric(df_exp['valor'], errors='coerce').fillna(0.0)
-    if 'status' not in df_exp.columns:
-        df_exp['status'] = 'Pago'
-    df_exp['status'] = df_exp['status'].fillna('Pago').astype(str)
+    if 'tipo' not in df_exp.columns: df_exp['tipo'] = ''
+    if 'status' not in df_exp.columns: df_exp['status'] = 'Pago'
     df_exp['tipo'] = df_exp['tipo'].fillna('').astype(str)
+    df_exp['status'] = df_exp['status'].fillna('Pago').astype(str)
+
+    # Ordena por data (NaT no fim), depois descrição
+    if 'data' in df_exp.columns:
+        df_exp = df_exp.sort_values(by=['data', 'descricao'], na_position='last')
+    else:
+        df_exp = df_exp.sort_values(by=['descricao'])
 
     # Configuração do PDF
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(auto=True, margin=15)  # margem para rodapé
     pdf.add_page()
 
-    # Margens e larguras
+    # Medidas
     left_margin = 10
     right_margin = 10
     page_w = 210
     usable_w = page_w - left_margin - right_margin
 
-    # Layout de colunas (soma deve ser == usable_w)
-    # Data | Descricao | Valor | Tipo | Status
+    # Larguras das colunas (somatório == usable_w)
     col_w = {
         "Data": 22,
         "Descricao": 92,
@@ -387,7 +382,7 @@ def gerar_pdf(df, nome_mes):
         for k in col_w:
             col_w[k] = round(col_w[k] * escala, 2)
 
-    row_h = 8  # altura base de linha
+    row_h = 8
     header_h = 9
 
     def draw_title():
@@ -397,8 +392,8 @@ def gerar_pdf(df, nome_mes):
 
     def draw_header():
         pdf.set_font("Helvetica", "B", 10)
-        pdf.set_fill_color(230, 236, 245)   # fundo levemente cinza
-        pdf.set_draw_color(200, 210, 220)   # borda suave
+        pdf.set_fill_color(230, 236, 245)
+        pdf.set_draw_color(200, 210, 220)
         pdf.set_text_color(20, 30, 40)
         pdf.cell(col_w["Data"],     header_h, "Data",      border=1, ln=0, align='C', fill=True)
         pdf.cell(col_w["Descricao"], header_h, "Descricao", border=1, ln=0, align='C', fill=True)
@@ -408,35 +403,31 @@ def gerar_pdf(df, nome_mes):
         pdf.set_text_color(0, 0, 0)
 
     def ensure_space(next_block_height):
-        """Garante espaço; se não houver, abre nova página e redesenha header."""
-        if pdf.get_y() + next_block_height + 15 > pdf.h:  # 15 = auto_page_break margin
+        # Se não houver espaço para a próxima linha, cria nova página e redesenha header
+        if pdf.get_y() + next_block_height + 15 > pdf.h:
             pdf.add_page()
             draw_header()
 
-    # Título + Cabeçalho inicial
     draw_title()
     draw_header()
     pdf.set_font("Helvetica", "", 9)
 
-    # Renderiza linhas
     for _, row in df_exp.iterrows():
         ensure_space(row_h)
 
         # Data
         pdf.cell(col_w["Data"], row_h, row["data_fmt"], border=1, ln=0, align='C')
 
-        # Descrição (truncada em 1 linha com “…”)
+        # Descrição (trunca em 1 linha com "…", sem remover a linha)
         desc = str(row["descricao"])
-        max_w = col_w["Descricao"] - 2  # padding interno
-        pdf.set_font("Helvetica", "", 9)
+        max_w = col_w["Descricao"] - 2
         while pdf.get_string_width(desc) > max_w and len(desc) > 0:
             desc = desc[:-1]
-        if desc != str(row["descricao"]):
-            if len(desc) >= 1:
-                desc = desc[:-1] + "…"
+        if desc != str(row["descricao"]) and len(desc) >= 1:
+            desc = desc[:-1] + "…"
         pdf.cell(col_w["Descricao"], row_h, desc, border=1, ln=0, align='L')
 
-        # Valor (alinhado à direita pt-BR)
+        # Valor (pt-BR simples)
         valor_txt = f"R$ {row['valor']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         pdf.cell(col_w["Valor"], row_h, valor_txt, border=1, ln=0, align='R')
 
@@ -446,7 +437,6 @@ def gerar_pdf(df, nome_mes):
         # Status
         pdf.cell(col_w["Status"], row_h, row["status"], border=1, ln=1, align='C')
 
-    # Retorno em bytes (compatível com FPDF em diferentes versões)
     try:
         return bytes(pdf.output())
     except Exception:
@@ -501,7 +491,10 @@ if not df_geral.empty:
     total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
     balanco = total_in - total_out_pagas
 
-    df_mes = df_geral[(df_geral['data'].dt.month == mes_num) & (df_geral['data'].dt.year == ano_ref)]
+    df_mes = df_geral[
+        (df_geral['data'].dt.month == mes_num) &
+        (df_geral['data'].dt.year == ano_ref)
+    ]
 
     data_inicio_mes_selecionado = pd.Timestamp(date(ano_ref, mes_num, 1))
     df_atrasados_passado = df_geral[
@@ -678,24 +671,41 @@ with aba_reserva:
             st.warning(f"⚠️ Você possui **R$ {total_negoc:,.2f}** em dívidas em negociação (não afetando o patrimônio real).")
 
     st.markdown("### 📄 Relatórios")
-    if not df_mes.empty:
-        col_rel1, col_rel2 = st.columns(2)
-        with col_rel1:
-            st.download_button(
-                label="📥 Baixar Excel",
-                data=gerar_excel(df_mes),
-                file_name=f"Financeiro_{mes_nome}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        with col_rel2:
-            st.download_button(
-                label="📥 Baixar PDF",
-                data=gerar_pdf(df_mes, mes_nome),
-                file_name=f"Financeiro_{mes_nome}.pdf",
-                mime="application/pdf"
-            )
+
+    # >>> Recalcula o DF para o período selecionado no momento do download
+    if not st.session_state.dados.empty:
+        df_para_relatorio = st.session_state.dados.copy()
+        df_para_relatorio['data'] = pd.to_datetime(df_para_relatorio['data'], errors='coerce')
+        mask = (
+            (df_para_relatorio['data'].dt.month == mes_num) &
+            (df_para_relatorio['data'].dt.year == ano_ref)
+        )
+        df_para_relatorio = df_para_relatorio[mask].copy()
+        df_para_relatorio = df_para_relatorio.sort_values(by=['data', 'descricao'], na_position='last')
+
+        # Debug rápido: quantas linhas irão para o arquivo?
+        st.caption(f"🧾 Lançamentos no relatório: **{len(df_para_relatorio)}**")
+
+        if not df_para_relatorio.empty:
+            col_rel1, col_rel2 = st.columns(2)
+            with col_rel1:
+                st.download_button(
+                    label="📥 Baixar Excel",
+                    data=gerar_excel(df_para_relatorio),
+                    file_name=f"Financeiro_{mes_nome}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            with col_rel2:
+                st.download_button(
+                    label="📥 Baixar PDF",
+                    data=gerar_pdf(df_para_relatorio, mes_nome),
+                    file_name=f"Financeiro_{mes_nome}.pdf",
+                    mime="application/pdf"
+                )
+        else:
+            st.caption("Selecione um mês com dados para gerar relatórios.")
     else:
-        st.caption("Selecione um mês com dados para gerar relatórios.")
+        st.caption("Sem dados para gerar relatórios.")
 
 with aba_sonhos:
     st.markdown("### 🎯 Calculadora de Sonhos")
