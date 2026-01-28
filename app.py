@@ -15,7 +15,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 
 # ============================
-# CONFIGURAÇÃO DA PÁGINA (MOBILE) - deve ser a 1ª chamada do Streamlit
+# CONFIGURAÇÃO DA PÁGINA (MOBILE) - 1ª chamada do Streamlit
 # ============================
 st.set_page_config(
     page_title="Minha Casa",
@@ -196,7 +196,7 @@ try:
     url: str = st.secrets["SUPABASE_URL"]
     key: str = st.secrets["SUPABASE_KEY"]
     supabase: Client = create_client(url, key)
-except Exception as e:
+except Exception:
     st.error("Erro ao conectar ao banco de dados. Verifique os Secrets.")
     st.stop()
 
@@ -238,7 +238,7 @@ if not st.session_state.logged_in:
     login()
     st.stop()
 
-# Botão de Logout (opcional)
+# Botão de Logout
 if st.sidebar.button("Sair"):
     st.session_state.logged_in = False
     st.rerun()
@@ -374,7 +374,7 @@ def gerar_pdf(df, nome_mes):
 
     table_data = [header] + data_rows
 
-    # Larguras em A4 (somam algo próximo de 186mm útil dentro das margens)
+    # Larguras em A4 (dentro das margens úteis)
     col_widths = [22*mm, 70*mm, 25*mm, 22*mm, 22*mm, 25*mm]
 
     tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -392,7 +392,6 @@ def gerar_pdf(df, nome_mes):
         ('ALIGN', (3,1), (5,-1), 'CENTER'),    # Tipo/Status/Responsável
 
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#C8D2DC")),
-
         ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#FAFBFD")]),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
     ]))
@@ -457,20 +456,25 @@ if not df_geral.empty:
     df_mes = df_geral[
         (df_geral['data'].dt.month == mes_num) &
         (df_geral['data'].dt.year == ano_ref)
-    ]
+    ].copy()
+
+    # ✅ Garante coluna responsavel no df_mes
+    if 'responsavel' not in df_mes.columns:
+        df_mes['responsavel'] = 'Ambos'
+    df_mes['responsavel'] = df_mes['responsavel'].fillna('Ambos').astype(str)
 
     data_inicio_mes_selecionado = pd.Timestamp(date(ano_ref, mes_num, 1))
     df_atrasados_passado = df_geral[
         (df_geral['status'] == 'Pendente') &
         (df_geral['data'] < data_inicio_mes_selecionado) &
         (df_geral['tipo'] == 'Saída')
-    ]
+    ].copy()
 
 # ============================
-# ABAS
+# ABAS (ordem solicitada)
 # ============================
-aba_resumo, aba_negociacao, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(
-    ["📊 Mês", "🤝 Negociação", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"]
+aba_resumo, aba_novo, aba_reserva, aba_negociacao, aba_metas, aba_sonhos = st.tabs(
+    ["📊 Mês", "➕ Novo", "🏦 Caixa", "🤝 Negociação", "🎯 Metas", "🚀 Sonhos"]
 )
 
 # ============================
@@ -530,8 +534,8 @@ with aba_resumo:
                     txt_venc = f" <span class='vencimento-alerta' style='color:#D97706'>Vence Hoje!</span>"
 
             resp_txt = row.get('responsavel', 'Ambos')
-
             dt_card = row['data'].strftime('%d %b') if pd.notnull(row['data']) else '-- ---'
+
             st.markdown(f"""
               <div class="transaction-card">
                 <div class="transaction-left">
@@ -562,88 +566,6 @@ with aba_resumo:
             st.markdown("<br>", unsafe_allow_html=True)
     else:
         st.info("Toque em 'Novo' para começar!")
-
-# ============================
-# ABA: NEGOCIAÇÃO (separada)
-# ============================
-with aba_negociacao:
-    st.markdown("### 🤝 Contas em Negociação")
-
-    if st.session_state.dados.empty:
-        st.info("Não há dados.")
-    else:
-        df_neg = st.session_state.dados.copy()
-        df_neg = df_neg[df_neg['status'] == "Em Negociação"]
-
-        col_f1, col_f2 = st.columns([2,1])
-        resp_filtro = col_f1.selectbox("Responsável", ["Todos"] + PESSOAS, index=0)
-        somente_mes = col_f2.checkbox("Mostrar apenas do mês selecionado", value=False)
-
-        if resp_filtro != "Todos":
-            df_neg = df_neg[df_neg['responsavel'] == resp_filtro]
-
-        if somente_mes:
-            df_neg = df_neg[
-                (df_neg['data'].dt.month == mes_num) &
-                (df_neg['data'].dt.year == ano_ref)
-            ]
-
-        if df_neg.empty:
-            st.caption("Sem itens em negociação com os filtros atuais.")
-        else:
-            total_neg = float(df_neg['valor'].sum())
-            qtd_neg = int(len(df_neg))
-            por_pessoa = df_neg.groupby('responsavel')['valor'].sum().sort_values(ascending=False)
-
-            m1, m2 = st.columns(2)
-            m1.metric("Total em Negociação", f"R$ {total_neg:,.2f}")
-            m2.metric("Quantidade de Itens", str(qtd_neg))
-
-            with st.expander("Ver totais por responsável", expanded=True):
-                for pessoa, soma in por_pessoa.items():
-                    st.write(f"**{pessoa}** — R$ {soma:,.2f}")
-
-            st.markdown("#### Itens")
-            for _, row in df_neg.sort_values(by='data', ascending=False).iterrows():
-                icon = row['categoria'].split()[0] if " " in row['categoria'] else "💬"
-                dt_txt = row['data'].strftime('%d/%m/%Y') if pd.notnull(row['data']) else '--/--/----'
-                st.markdown(f"""
-                <div class="transaction-card">
-                  <div class="transaction-left">
-                    <div class="card-icon">{icon}</div>
-                    <div class="tc-info">
-                      <div class="tc-title">{row['descricao']}</div>
-                      <div class="tc-meta">{dt_txt} • <b>{row['categoria']}</b></div>
-                      <div class="status-badge negociacao">Em Negociação</div>
-                      <div class="tc-meta">Responsável: <b>{row.get('responsavel','Ambos')}</b></div>
-                    </div>
-                  </div>
-                  <div class="transaction-right saida">R$ {row['valor']:,.2f}</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                cA, cB, cC, cD = st.columns([1,1,2,1])
-                with cA:
-                    if st.button("Marcar Pendente", key=f"neg_to_pen_{row['id']}"):
-                        supabase.table("transacoes").update({"status": "Pendente"}).eq("id", row['id']).execute()
-                        st.session_state.dados = buscar_dados(); st.rerun()
-                with cB:
-                    if st.button("Marcar Pago", key=f"neg_to_pago_{row['id']}"):
-                        supabase.table("transacoes").update({"status": "Pago"}).eq("id", row['id']).execute()
-                        st.session_state.dados = buscar_dados(); st.rerun()
-                with cC:
-                    novo_resp = st.selectbox(
-                        "Responsável",
-                        PESSOAS,
-                        index=idx_pessoa(row.get('responsavel', 'Ambos'), PESSOAS),
-                        key=f"resp_{row['id']}"
-                    )
-                with cD:
-                    if st.button("Salvar Resp.", key=f"save_resp_{row['id']}"):
-                        supabase.table("transacoes").update({"responsavel": novo_resp}).eq("id", row['id']).execute()
-                        st.session_state.dados = buscar_dados(); st.rerun()
-
-                st.markdown("<br>", unsafe_allow_html=True)
 
 # ============================
 # ABA: NOVO (Lançamento + Fixos)
@@ -710,19 +632,6 @@ with aba_novo:
             st.caption("Sem fixos configurados.")
 
 # ============================
-# ABA: METAS
-# ============================
-with aba_metas:
-    st.info("💡 Exemplo: Defina R$ 1.000,00 para '🛒 Mercado' para controlar seus gastos essenciais.")
-    for cat in CATEGORIAS:
-        if cat != "💰 Salário":
-            atual_m = float(st.session_state.metas.get(cat, 0))
-            nova_meta = st.number_input(f"Meta {cat}", min_value=0.0, value=atual_m, key=f"meta_{cat}")
-            if st.button(f"Atualizar {cat}", key=f"btn_meta_{cat}"):
-                supabase.table("metas").upsert({"categoria": cat, "limite": nova_meta}).execute()
-                st.session_state.metas = buscar_metas(); st.rerun()
-
-# ============================
 # ABA: CAIXA / RELATÓRIOS
 # ============================
 with aba_reserva:
@@ -772,6 +681,108 @@ with aba_reserva:
             st.caption("Selecione um mês com dados para gerar relatórios.")
     else:
         st.caption("Sem dados para gerar relatórios.")
+
+# ============================
+# ABA: NEGOCIAÇÃO (separada)
+# ============================
+with aba_negociacao:
+    st.markdown("### 🤝 Contas em Negociação")
+
+    if st.session_state.dados.empty:
+        st.info("Não há dados.")
+    else:
+        df_neg = st.session_state.dados.copy()
+
+        # ✅ Garante a coluna antes de qualquer filtro (evita KeyError)
+        if 'responsavel' not in df_neg.columns:
+            df_neg['responsavel'] = 'Ambos'
+        df_neg['responsavel'] = df_neg['responsavel'].fillna('Ambos').astype(str)
+
+        # Filtra status negociação
+        df_neg = df_neg[df_neg['status'] == "Em Negociação"]
+
+        col_f1, col_f2 = st.columns([2,1])
+        resp_filtro = col_f1.selectbox("Responsável", ["Todos"] + PESSOAS, index=0)
+        somente_mes = col_f2.checkbox("Mostrar apenas do mês selecionado", value=False)
+
+        if resp_filtro != "Todos":
+            df_neg = df_neg[df_neg['responsavel'] == resp_filtro]
+
+        if somente_mes and 'data' in df_neg.columns:
+            df_neg = df_neg[
+                (df_neg['data'].dt.month == mes_num) &
+                (df_neg['data'].dt.year == ano_ref)
+            ]
+
+        if df_neg.empty:
+            st.caption("Sem itens em negociação com os filtros atuais.")
+        else:
+            total_neg = float(df_neg['valor'].sum())
+            qtd_neg = int(len(df_neg))
+            por_pessoa = df_neg.groupby('responsavel')['valor'].sum().sort_values(ascending=False)
+
+            m1, m2 = st.columns(2)
+            m1.metric("Total em Negociação", f"R$ {total_neg:,.2f}")
+            m2.metric("Quantidade de Itens", str(qtd_neg))
+
+            with st.expander("Ver totais por responsável", expanded=True):
+                for pessoa, soma in por_pessoa.items():
+                    st.write(f"**{pessoa}** — R$ {soma:,.2f}")
+
+            st.markdown("#### Itens")
+            for _, row in df_neg.sort_values(by='data', ascending=False).iterrows():
+                icon = row['categoria'].split()[0] if " " in row['categoria'] else "💬"
+                dt_txt = row['data'].strftime('%d/%m/%Y') if pd.notnull(row['data']) else '--/--/----'
+                st.markdown(f"""
+                <div class="transaction-card">
+                  <div class="transaction-left">
+                    <div class="card-icon">{icon}</div>
+                    <div class="tc-info">
+                      <div class="tc-title">{row['descricao']}</div>
+                      <div class="tc-meta">{dt_txt} • <b>{row['categoria']}</b></div>
+                      <div class="status-badge negociacao">Em Negociação</div>
+                      <div class="tc-meta">Responsável: <b>{row.get('responsavel','Ambos')}</b></div>
+                    </div>
+                  </div>
+                  <div class="transaction-right saida">R$ {row['valor']:,.2f}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                cA, cB, cC, cD = st.columns([1,1,2,1])
+                with cA:
+                    if st.button("Marcar Pendente", key=f"neg_to_pen_{row['id']}"):
+                        supabase.table("transacoes").update({"status": "Pendente"}).eq("id", row['id']).execute()
+                        st.session_state.dados = buscar_dados(); st.rerun()
+                with cB:
+                    if st.button("Marcar Pago", key=f"neg_to_pago_{row['id']}"):
+                        supabase.table("transacoes").update({"status": "Pago"}).eq("id", row['id']).execute()
+                        st.session_state.dados = buscar_dados(); st.rerun()
+                with cC:
+                    novo_resp = st.selectbox(
+                        "Responsável",
+                        PESSOAS,
+                        index=idx_pessoa(row.get('responsavel', 'Ambos'), PESSOAS),
+                        key=f"resp_{row['id']}"
+                    )
+                with cD:
+                    if st.button("Salvar Resp.", key=f"save_resp_{row['id']}"):
+                        supabase.table("transacoes").update({"responsavel": novo_resp}).eq("id", row['id']).execute()
+                        st.session_state.dados = buscar_dados(); st.rerun()
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+# ============================
+# ABA: METAS
+# ============================
+with aba_metas:
+    st.info("💡 Exemplo: Defina R$ 1.000,00 para '🛒 Mercado' para controlar seus gastos essenciais.")
+    for cat in CATEGORIAS:
+        if cat != "💰 Salário":
+            atual_m = float(st.session_state.metas.get(cat, 0))
+            nova_meta = st.number_input(f"Meta {cat}", min_value=0.0, value=atual_m, key=f"meta_{cat}")
+            if st.button(f"Atualizar {cat}", key=f"btn_meta_{cat}"):
+                supabase.table("metas").upsert({"categoria": cat, "limite": nova_meta}).execute()
+                st.session_state.metas = buscar_metas(); st.rerun()
 
 # ============================
 # ABA: SONHOS
