@@ -1,9 +1,8 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 from datetime import date
-import plotly.express as px
 from supabase import create_client, Client
-import os
 import io
 from fpdf import FPDF
 import streamlit.components.v1 as components
@@ -53,14 +52,14 @@ def inject_head_for_ios():
         add('meta', { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' });
         add('meta', { name: 'apple-mobile-web-app-title', content: 'Minha Casa' });
 
-        // Evita auto link de telefones (comportamentos indesejados em iOS antigo)
+        // Evita auto link de telefones (iOS antigo)
         add('meta', { name: 'format-detection', content: 'telephone=no' });
 
         // Ícones (substitua as URLs por ícone próprio 180x180 e variações)
         const icon180 = 'https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png';
-        const icon152 = icon180; // substitua se tiver um 152x152 próprio
-        const icon120 = icon180; // substitua se tiver um 120x120 próprio
-        const icon76  = icon180; // substitua se tiver um 76x76 próprio
+        const icon152 = icon180;
+        const icon120 = icon180;
+        const icon76  = icon180;
 
         add('link', { rel:'apple-touch-icon', sizes:'180x180', href: icon180 });
         add('link', { rel:'apple-touch-icon', sizes:'152x152', href: icon152 });
@@ -78,32 +77,33 @@ def inject_head_for_ios():
 inject_head_for_ios()
 
 # =========================================================
-# CSS MOBILE-FIRST (iOS-friendly): safe-area, inputs 16px,
-# botões maiores, hierarquia visual e performance no Safari
+# CSS MID-CONTRAST (claro por padrão) + Dark Mode moderado
+# Corrige: pouca legibilidade no claro + overlap do ícone
 # =========================================================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-
+/* ========= PALETA MID-CONTRAST (claro por padrão) ========= */
 :root{
-  --bg:#F8FAFC;
-  --text:#0F172A;
-  --muted:#64748B;
-  --brand:#3B82F6;
-  --brand-600:#2563EB;
-  --ok:#10B981;
-  --warn:#F59E0B;
-  --danger:#EF4444;
-  --card:#FFFFFF;
-  --line:#E2E8F0;
-  --soft-line:#F1F5F9;
+  --bg:#F3F5F9;      /* cinza claro (não estoura como branco 100%) */
+  --text:#0A1628;    /* texto principal bem escuro */
+  --muted:#334155;   /* texto secundário */
+  --brand:#2563EB;   /* azul */
+  --brand-600:#1D4ED8;
+  --ok:#0EA5A4;
+  --warn:#D97706;
+  --danger:#DC2626;
+  --card:#FFFFFF;    /* cards brancos */
+  --line:#D6DEE8;    /* borda nítida */
+  --soft-line:#E6ECF3;
 }
 
-html, body, [class*="css"] { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+html, body, [class*="css"] {
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
 html, body { background: var(--bg); color: var(--text); -webkit-text-size-adjust: 100%; }
-.stApp { background: var(--bg); min-height: -webkit-fill-available; }
+.stApp { background: var(--bg); }
 
-/* Respeita safe-area (notch / gestos) no iPhone */
+/* Safe-area iOS */
 @supports(padding: max(0px)) {
   .stApp, .block-container {
     padding-top: max(10px, env(safe-area-inset-top)) !important;
@@ -111,122 +111,163 @@ html, body { background: var(--bg); color: var(--text); -webkit-text-size-adjust
   }
 }
 
-/* Inputs >= 16px => evita zoom automático no iOS */
+/* Inputs >= 16px => sem zoom no iOS, mais contraste */
 input, select, textarea,
 .stTextInput input, .stNumberInput input, .stDateInput input,
 .stSelectbox div[data-baseweb="select"] {
-  font-size: 16px !important;
+  font-size: 16px !important; color: var(--text) !important;
 }
-
-/* Evita highlight azul ao toque no iOS */
-* { -webkit-tap-highlight-color: transparent; }
-
-/* Ajusta contraste e aparência geral */
-:root { color-scheme: light; }
+.stTextInput input, .stNumberInput input, .stDateInput input {
+  background: var(--card) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 12px !important;
+}
+.stSelectbox > div[data-baseweb="select"]{
+  background: var(--card) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 12px !important;
+}
+::placeholder { color: #475569 !important; opacity: 1 !important; }
+.stSelectbox svg, .stNumberInput svg { color: #1F2937 !important; opacity: 1 !important; }
 
 /* Cabeçalho */
-.header-container { text-align: center; padding: 0 10px 18px 10px; }
+.header-container { text-align: center; padding: 0 10px 16px 10px; }
 .main-title {
   background: linear-gradient(90deg, #1E293B, var(--brand));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  font-weight: 700; font-size: 2.0rem; margin: 0;
+  font-weight: 800; font-size: 1.9rem; margin: 0;
 }
-.slogan { color: var(--muted); font-size: .95rem; }
+.slogan { color: var(--muted); font-size: .95rem; font-weight: 600; }
 
-/* Abas */
-.stTabs [data-baseweb="tab-list"] {
-  display: flex; justify-content: center; gap: 6px; width: 100%;
-  background: var(--line); border-radius: 16px; padding: 4px;
+/* Abas (claras com contraste) */
+.stTabs [data-baseweb="tab-list"]{
+  display:flex; gap:6px; width:100%;
+  background:#E9EEF5; border:1px solid var(--line); border-radius:16px; padding:4px;
 }
-.stTabs [data-baseweb="tab"] {
-  flex: 1 1 auto; text-align: center; background: transparent;
-  border-radius: 12px; padding: 12px 6px !important; color: var(--muted);
-  font-size: 14px; font-weight: 700; border: none !important;
+.stTabs [data-baseweb="tab"]{
+  flex:1 1 auto; text-align:center; background:transparent; border-radius:12px;
+  padding:12px 6px !important; color: var(--muted); font-size:14px; font-weight:800;
+  border:none !important;
 }
-.stTabs [aria-selected="true"] {
+.stTabs [aria-selected="true"]{
   background: var(--card) !important; color: var(--brand) !important;
-  box-shadow: 0 4px 10px rgba(0,0,0,.06);
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  border:1px solid var(--line);
 }
 
-/* Cards de métricas */
-[data-testid="stMetric"] {
+/* Métricas (legíveis no claro) */
+[data-testid="stMetric"]{
   background: var(--card);
-  border-radius: 16px; padding: 16px;
-  box-shadow: 0 6px 14px rgba(0,0,0,.05);
-  border: 1px solid var(--soft-line);
+  border-radius: 14px; padding: 14px;
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 6px rgba(0,0,0,.05);
+  color: var(--text);
 }
+[data-testid="stMetric"] * { opacity: 1 !important; color: var(--text) !important; }
+[data-testid="stMetricLabel"] { color: #0F172A !important; font-weight: 800 !important; }
+[data-testid="stMetricValue"] { color: #0A1628 !important; font-weight: 900 !important; }
 
-/* Botões (alvo de toque >= 48px) */
-.stButton>button {
-  width: 100%; min-height: 48px; border-radius: 14px; background: var(--brand);
-  color: #fff; border: none; padding: 12px 14px; font-weight: 800; letter-spacing:.2px;
+/* Botões */
+.stButton>button{
+  width:100%; min-height:46px; border-radius:12px; background: var(--brand);
+  color:#fff; border:1px solid #1E40AF; padding:10px 14px; font-weight:800; letter-spacing:.2px;
+  box-shadow: 0 1px 8px rgba(29,78,216,.18);
   transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
 }
-.stButton>button:active { transform: scale(.98); }
-.stButton>button:hover { background: var(--brand-600); box-shadow: 0 6px 16px rgba(37, 99, 235, .30); }
+.stButton>button:active{ transform: scale(.98); }
+.stButton>button:hover{ background: var(--brand-600); }
 
-/* Botão de texto "Excluir" */
-.btn-excluir > div > button {
+/* Botão Excluir (texto, sem “pill” azul) */
+.btn-excluir > div > button{
   background: transparent !important; color: var(--danger) !important;
-  border: none !important; font-size: 13px !important; font-weight: 600 !important;
-  margin-top: 0 !important; text-align: right !important; min-height: 40px !important;
+  border: none !important; font-size: 14px !important; font-weight: 800 !important;
+  min-height: 42px !important; box-shadow:none !important;
 }
 
-/* Cards de transação */
-.transaction-card {
-  background: var(--card); padding: 14px; border-radius: 16px;
-  margin-bottom: 6px; display: flex; justify-content: space-between; gap:12px;
-  align-items: center; border: 1px solid var(--soft-line);
-  box-shadow: 0 2px 6px rgba(0,0,0,.03);
+/* ===== Cards de transação — correção do overlap ===== */
+.transaction-card{
+  background: var(--card); padding: 12px; border-radius: 14px;
+  margin-bottom: 10px; display:flex; justify-content:space-between; gap:12px;
+  align-items:flex-start; border:1px solid var(--line);
+  box-shadow: 0 1px 6px rgba(0,0,0,.05); color: var(--text);
 }
-.card-icon {
-  background: #F1F5F9; width: 44px; height: 44px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center; font-size: 20px;
-  margin-right: 10px; flex: 0 0 44px;
+.transaction-left{
+  display:flex; align-items:flex-start; gap:12px; min-width:0;
 }
-.status-badge {
-  font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 800;
-  text-transform: uppercase; margin-top: 6px; display: inline-block;
+.card-icon{
+  background: #EBF1FA; width: 42px; height: 42px; border-radius: 10px;
+  display:flex; align-items:center; justify-content:center; font-size: 20px; color:#0F172A;
+  flex:0 0 42px;
+}
+.tc-info{
+  display:flex; flex-direction:column; gap:4px; min-width:0; /* evita quebra por cima */
+}
+.tc-title{
+  font-weight: 700; color: #0A1628; line-height: 1.15; word-break: break-word;
+}
+.tc-meta{
+  font-size: 12px; color: #334155; line-height: 1.1;
+}
+.status-badge{
+  font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 900;
+  text-transform: uppercase; display:inline-block; letter-spacing:.2px; width: fit-content;
+}
+.status-badge.pago{ background:#DCFCE7; color:#065F46; border:1px solid #86EFAC; }
+.status-badge.pendente{ background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; }
+.status-badge.negociacao{ background:#DBEAFE; color:#1E3A8A; border:1px solid #93C5FD; }
+
+.transaction-right{
+  color:#0A1628; font-weight: 800; white-space: nowrap; margin-left:auto;
+}
+.transaction-right.entrada{ color:#0EA5A4; }
+.transaction-right.saida{ color:#DC2626; }
+
+/* Vencimento visível */
+.vencimento-alerta { color: #B91C1C; font-size: 12px; font-weight: 800; }
+
+/* Card Patrimônio (claro) */
+.reserva-card{
+  background: linear-gradient(135deg, #F8FAFF 0%, #E9EEF7 100%);
+  color: #0A1628; padding: 18px; border-radius: 14px; text-align: center;
+  box-shadow: 0 1px 8px rgba(0,0,0,.06); border:1px solid var(--line);
 }
 
-/* Vencimento */
-.vencimento-alerta { color: var(--danger); font-size: 12px; font-weight: 700; }
+/* Expanders */
+[data-testid="stExpander"] > details{
+  border:1px solid var(--line); border-radius:14px; padding:6px 10px; background: var(--card);
+}
+[data-testid="stExpander"] summary { padding:10px; font-weight: 800; color: var(--text); }
 
-/* Card Patrimônio */
-.reserva-card {
-  background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
-  color: white; padding: 24px; border-radius: 20px; text-align: center;
-  box-shadow: 0 14px 24px rgba(0,0,0,.16); margin-bottom: 20px;
+/* Colunas no iPhone */
+@media (max-width: 480px){
+  [data-testid="column"]{ width:100% !important; flex:1 1 100% !important; }
+  .main-title{ font-size:1.65rem; }
 }
 
-/* Metas */
-.meta-container {
-  background: #EEF2F6; padding: 12px; border-radius: 12px; margin-bottom: 10px;
-  color: #0F172A; font-weight: 600;
+/* Remover itens padrão do Streamlit */
+#MainMenu, footer, header{ visibility: hidden; }
+.block-container{ padding-top: 0.9rem !important; }
+
+/* ========= DARK MODE autom. (mais claro que o anterior) ========= */
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0F172A; --text:#E7EEF8; --muted:#C8D4EE;
+    --card:#141C2F; --line:#24324A; --soft-line:#1F2A3E;
+    --brand:#7AA7FF; --brand-600:#5E90FF;
+    --ok:#34D399; --warn:#FBBF24; --danger:#F87171;
+  }
+  html, body { background: var(--bg); color: var(--text); }
+  .stApp, .block-container { background: var(--bg); }
+  .stTabs [data-baseweb="tab-list"]{ background:#18223A; border-color:#25314A; }
+  .stTabs [aria-selected="true"]{ border-color:#2E3C59; box-shadow: 0 1px 6px rgba(0,0,0,.35); }
+
+  .transaction-card, [data-testid="stMetric"], [data-testid="stExpander"] > details{
+    background: var(--card); border-color:#2A3952; box-shadow: 0 1px 10px rgba(0,0,0,.32);
+  }
+  .card-icon{ background:#223049; color:#E5E7EB; }
+  .slogan{ color:#B8C3D9; }
+  ::placeholder{ color:#A8B5CC !important; }
 }
-
-/* Expanders toque-friendly */
-[data-testid="stExpander"] > details {
-  border: 1px solid var(--soft-line);
-  border-radius: 14px; padding: 6px 10px; background: var(--card);
-}
-[data-testid="stExpander"] summary { padding: 10px; font-weight: 700; }
-
-/* Colunas responsivas no iPhone */
-@media (max-width: 480px) {
-  [data-testid="column"] { width: 100% !important; flex: 1 1 100% !important; }
-  .main-title { font-size: 1.7rem; }
-  .slogan { font-size: .9rem; }
-}
-
-/* Limpeza da UI padrão do Streamlit */
-#MainMenu { visibility: hidden; }
-footer { visibility: hidden; }
-header { visibility: hidden; }
-.block-container { padding-top: 1.2rem !important; }
-
-/* Ajuste de rolagem no iOS */
-html, body { overscroll-behavior-y: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -296,7 +337,7 @@ def gerar_pdf(df, nome_mes):
         pdf.cell(38, 10, row['tipo'], 1)
         pdf.cell(38, 10, row['status'], 1)
         pdf.ln()
-    # Observação: algumas versões do FPDF precisam do dest='S'
+    # Compatibilidade de retorno do FPDF
     try:
         return bytes(pdf.output())
     except:
@@ -396,19 +437,20 @@ with aba_resumo:
                         st.markdown(f'<div class="meta-container"><b>{cat}</b> (R$ {atual:,.0f} / {lim:,.0f})</div>', unsafe_allow_html=True)
                         st.progress(min(atual/lim, 1.0))
 
-        st.markdown(f"### Histórico")
+        st.markdown("### Histórico")
         for idx, row in df_mes.sort_values(by='data', ascending=False).iterrows():
-            cor = "#10B981" if row['tipo'] == "Entrada" else "#EF4444"
+            # Classes/cores para valor
+            valor_class = "entrada" if row['tipo'] == "Entrada" else "saida"
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
             s_text = row.get('status', 'Pago')
 
-            # Cores do badge
+            # Classe do badge
             if s_text == "Pago":
-                s_color, s_bg = "#10B981", "#D1FAE5"
+                s_class = "pago"
             elif s_text == "Pendente":
-                s_color, s_bg = "#F59E0B", "#FEF3C7"
+                s_class = "pendente"
             else:
-                s_color, s_bg = "#3B82F6", "#DBEAFE"  # Em Negociação
+                s_class = "negociacao"
 
             # Vencimento
             txt_venc = ""
@@ -417,20 +459,21 @@ with aba_resumo:
                 if dias_diff < 0:
                     txt_venc = f" <span class='vencimento-alerta'>Atrasada há {-dias_diff} dias</span>"
                 elif dias_diff == 0:
-                    txt_venc = f" <span class='vencimento-alerta' style='color:#F59E0B'>Vence Hoje!</span>"
+                    txt_venc = f" <span class='vencimento-alerta' style='color:#D97706'>Vence Hoje!</span>"
 
+            # ---- CARD DE TRANSAÇÃO (layout corrigido) ----
             st.markdown(f"""
-                <div class="transaction-card">
-                    <div style="display: flex; align-items: center;">
-                        <div class="card-icon">{icon}</div>
-                        <div>
-                            <div style="font-weight: 600; color: #1E293B;">{row["descricao"]}</div>
-                            <div style="font-size: 11px; color: #64748B;">{row["data"].strftime('%d %b')}{txt_venc}</div>
-                            <div class="status-badge" style="background: {s_bg}; color: {s_color};">{s_text}</div>
-                        </div>
-                    </div>
-                    <div style="color: {cor}; font-weight: 700;">R$ {row["valor"]:,.2f}</div>
+              <div class="transaction-card">
+                <div class="transaction-left">
+                  <div class="card-icon">{icon}</div>
+                  <div class="tc-info">
+                    <div class="tc-title">{row["descricao"]}</div>
+                    <div class="tc-meta">{row["data"].strftime('%d %b')}{txt_venc}</div>
+                    <div class="status-badge {s_class}">{s_text}</div>
+                  </div>
                 </div>
+                <div class="transaction-right {valor_class}">R$ {row["valor"]:,.2f}</div>
+              </div>
             """, unsafe_allow_html=True)
 
             cp, cd = st.columns([1, 1])
@@ -514,7 +557,10 @@ with aba_metas:
                 st.session_state.metas = buscar_metas(); st.rerun()
 
 with aba_reserva:
-    st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.8;font-size:14px;">PATRIMÔNIO REAL</p><h2>R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="reserva-card"><p style="margin:0;opacity:0.9;font-size:14px;">PATRIMÔNIO REAL</p><h2 style="margin:.4rem 0 0 0;">R$ {balanco:,.2f}</h2></div>',
+        unsafe_allow_html=True
+    )
 
     # Resumo de Dívidas em Negociação
     if not df_geral.empty:
