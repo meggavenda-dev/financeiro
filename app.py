@@ -96,6 +96,7 @@ def inject_head_for_ios():
           for (const [k,v] of Object.entries(attrs)) el.setAttribute(k, v);
           head.appendChild(el);
         }
+        add('link', { rel:'manifest', href:'./manifest.json' });
         // Viewport ideal para iOS (safe-area)
         [...head.querySelectorAll('meta[name="viewport"]')].forEach(m => m.remove());
         add('meta', { name:'viewport', content:'width=device-width, initial-scale=1, viewport-fit=cover, shrink-to-fit=no' });
