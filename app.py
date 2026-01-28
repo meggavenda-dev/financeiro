@@ -25,6 +25,11 @@ except Exception as e:
     st.error("Erro ao conectar ao banco de dados. Verifique os Secrets.")
     st.stop()
 
+import bcrypt
+senha = "A862721*".encode('utf-8')
+hash_gerado = bcrypt.hashpw(senha, bcrypt.gensalt())
+print(hash_gerado.decode('utf-8'))
+
 # ============================
 # SISTEMA DE LOGIN
 # ============================
