@@ -1,15 +1,13 @@
-# app.py — Utilitário temporário para gerar salt/hash (PBKDF2-SHA256)
-# Use apenas para gerar o SQL do usuário admin no Supabase e depois remova este arquivo.
-
 import binascii
 import hashlib
 import secrets
 import streamlit as st
 
-# 1) Config da página DEVE vir antes de qualquer componente
+# 1) Config must be the VERY FIRST streamlit command
 st.set_page_config(page_title="Gerar Hash Admin", page_icon="🔑", layout="centered")
 
 def main():
+    # Now you can safely use st.expander or any other st. method
     st.title("🔐 Gerar salt/hash (PBKDF2-SHA256) para o Supabase")
     st.caption("Use TEMPORARIAMENTE. Após gerar e inserir no banco, remova este utilitário.")
 
