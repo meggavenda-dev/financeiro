@@ -6,6 +6,34 @@ from supabase import create_client, Client
 import io
 import streamlit.components.v1 as components
 
+
+# --- BOOTSTRAP: rodar uma vez para criar a usuária "alynne" ---
+import os, hashlib, base64
+from supabase import create_client
+
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def pbkdf2_hash(password: str, iterations: int = 260000) -> str:
+    salt = os.urandom(16)  # 128 bits de salt
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    salt_b64 = base64.b64encode(salt).decode()
+    hash_b64 = base64.b64encode(dk).decode()
+    return f"pbkdf2_sha256${iterations}${salt_b64}${hash_b64}"
+
+password_hash = pbkdf2_hash("862721*")
+
+# upsert para criar/atualizar a usuária
+sb.table("app_users").upsert({
+    "username": "alynne",
+    "password_hash": password_hash
+}).execute()
+
+st.success("Usuária 'alynne' criada/atualizada no banco com hash seguro.")
+
+#DELETAR AQUI PARA CIMA
+
 # === NOVO: ReportLab para gerar PDF robusto (cabeçalho + paginação) ===
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
