@@ -8,6 +8,7 @@ import streamlit.components.v1 as components
 
 
 
+
 #DELETAR AQUI PARA CIMA
 
 # === NOVO: ReportLab para gerar PDF robusto (cabeçalho + paginação) ===
