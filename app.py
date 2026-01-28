@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-
-# 1. TODOS OS IMPORTS NO TOPO
 import streamlit as st
 import pandas as pd
 from datetime import date
 from supabase import create_client, Client
 import io
-import binascii
-import hashlib
-import secrets
 import streamlit.components.v1 as components
+
+# === NOVO: ReportLab para gerar PDF robusto (cabeçalho + paginação) ===
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
 
 # ================================
 # CONFIGURAÇÃO DA PÁGINA (MOBILE)
