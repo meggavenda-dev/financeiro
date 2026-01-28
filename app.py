@@ -19,98 +19,117 @@ except Exception as e:
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Minha Casa", page_icon="🏡", layout="centered")
 
-# Injeção de Meta Tags para Android PWA e Estilos Globais
+# Injeção de Meta Tags para iOS Web App e Estilos Globais
 st.markdown(f"""
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <style>
         iframe[title="st.components.v1.html"] {{ display: none; }}
         /* Badge de Status */
         .status-badge {{
-            font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700;
-            text-transform: uppercase; margin-top: 4px; display: inline-block;
+            font-size: 11px; padding: 4px 10px; border-radius: 12px; font-weight: 700;
+            text-transform: uppercase; margin-top: 6px; display: inline-block;
         }}
         /* Estilo para Vencimento */
         .vencimento-alerta {{
             color: #EF4444; font-size: 11px; font-weight: 600;
         }}
     </style>
-    <link rel="shortcut icon" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
     <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
-    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png">
 """, unsafe_allow_html=True)
 
-# CSS PREMIUM ATUALIZADO
+# CSS PREMIUM OTIMIZADO PARA IOS
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    .stApp { background-color: #F8FAFC; }
-
-    .header-container { text-align: center; padding-bottom: 20px; }
-    .main-title { 
-        background: linear-gradient(90deg, #1E293B, #3B82F6);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 700; font-size: 2.5rem; margin-bottom: 0px;
+    /* Reset de fontes e scroll nativo iOS */
+    html, body, [class*="css"] { 
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
+        -webkit-font-smoothing: antialiased;
     }
-    .slogan { color: #64748B; font-size: 1rem; font-weight: 400; }
+    
+    .stApp { 
+        background-color: #F2F2F7; /* Cor de fundo padrão iOS Settings */
+    }
 
+    /* Padding superior para evitar o Notch */
+    .block-container { 
+        padding-top: 3.5rem !important; 
+        padding-bottom: 5rem !important;
+    }
+
+    .header-container { text-align: center; padding-bottom: 25px; }
+    .main-title { 
+        color: #1C1C1E;
+        font-weight: 800; font-size: 2.2rem; letter-spacing: -0.5px;
+    }
+    .slogan { color: #8E8E93; font-size: 0.95rem; font-weight: 400; }
+
+    /* Tabs Estilo Segmented Control (iOS) */
     .stTabs [data-baseweb="tab-list"] {
-        display: flex; justify-content: center; gap: 4px; width: 100%;
-        background-color: #E2E8F0; border-radius: 16px; padding: 4px;
+        background-color: #E3E3E8; border-radius: 12px; padding: 3px;
+        gap: 2px;
     }
     .stTabs [data-baseweb="tab"] {
-        flex-grow: 1; text-align: center; background-color: transparent;
-        border-radius: 12px; padding: 10px 2px !important; color: #64748B;
-        font-size: 13px; font-weight: 600; border: none !important;
+        height: 32px; flex-grow: 1; border-radius: 9px; 
+        font-size: 13px; font-weight: 500; color: #3A3A3C;
+        border: none !important; transition: all 0.2s;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #FFFFFF !important; color: #3B82F6 !important;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        background-color: #FFFFFF !important; color: #000000 !important;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.12);
     }
 
+    /* Inputs sem zoom automático no iOS (font-size 16px) */
+    input, select, textarea {
+        font-size: 16px !important;
+    }
+
+    /* Cards Estilo iOS */
     [data-testid="stMetric"] {
-        background-color: #FFFFFF; border-radius: 22px; padding: 15px;
-        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.05); border: 1px solid #F1F5F9;
+        background-color: #FFFFFF; border-radius: 16px; padding: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: none;
     }
 
     .stButton>button {
-        width: 100%; border-radius: 16px; background: #3B82F6;
-        color: white; border: none; padding: 12px; font-weight: 700;
-        transition: all 0.2s ease;
+        width: 100%; border-radius: 14px; background: #007AFF; /* Azul iOS */
+        color: white; border: none; height: 48px; font-weight: 600;
+        font-size: 16px; active: scale(0.98);
     }
-    .stButton>button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
 
     .transaction-card {
-        background-color: #FFFFFF; padding: 16px; border-radius: 20px;
-        margin-bottom: 0px; display: flex; justify-content: space-between;
-        align-items: center; border: 1px solid #F1F5F9;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        background-color: #FFFFFF; padding: 16px; border-radius: 16px;
+        margin-bottom: 8px; display: flex; justify-content: space-between;
+        align-items: center; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     }
+    
     .card-icon {
-        background: #F1F5F9; width: 40px; height: 40px; border-radius: 12px;
-        display: flex; align-items: center; justify-content: center; font-size: 18px;
-        margin-right: 12px;
+        background: #F2F2F7; width: 44px; height: 44px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center; font-size: 22px;
+        margin-right: 14px;
     }
 
     .reserva-card {
-        background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
-        color: white; padding: 25px; border-radius: 24px; text-align: center;
-        box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); margin-bottom: 25px;
+        background: #000000;
+        color: white; padding: 30px 20px; border-radius: 24px; text-align: center;
+        margin-bottom: 25px;
     }
 
     .meta-container {
-        background-color: #F1F5F9; padding: 12px; border-radius: 12px; margin-bottom: 10px;
+        background-color: #FFFFFF; padding: 12px; border-radius: 14px; 
+        margin-bottom: 10px; border: 1px solid #E5E5EA;
     }
 
     .btn-excluir > div > button {
-        background-color: transparent !important; color: #EF4444 !important;
-        border: none !important; font-size: 12px !important;
-        font-weight: 400 !important; margin-top: -10px !important; text-align: right !important;
+        background-color: transparent !important; color: #FF3B30 !important; /* Vermelho iOS */
+        border: none !important; font-size: 14px !important;
+        height: auto !important; padding: 0 !important;
     }
 
+    /* Esconder elementos desnecessários */
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-    .block-container { padding-top: 2rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -195,7 +214,6 @@ balanco = 0.0
 
 if not df_geral.empty:
     total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum()
-    # Lógica de Negociação: Apenas subtrai do balanço se estiver "Pago"
     total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
     balanco = total_in - total_out_pagas
     
@@ -208,10 +226,9 @@ if not df_geral.empty:
 aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
 
 with aba_resumo:
-    # Controle de Atrasados (Passado)
     if not df_atrasados_passado.empty:
         total_atrasado = df_atrasados_passado['valor'].sum()
-        with st.expander(f"⚠️ CONTAS PENDENTES DE MESES ANTERIORES: R$ {total_atrasado:,.2f}", expanded=True):
+        with st.expander(f"⚠️ PENDENTES ANTERIORES: R$ {total_atrasado:,.2f}", expanded=True):
             for _, row in df_atrasados_passado.iterrows():
                 col_at1, col_at2 = st.columns([3, 1])
                 col_at1.write(f"**{row['descricao']}** ({row['data'].strftime('%d/%m/%y')})")
@@ -226,8 +243,8 @@ with aba_resumo:
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Ganhos", f"R$ {entradas:,.2f}")
-        c2.metric("Gastos (Pagos)", f"R$ {saidas_pagas:,.2f}")
-        c3.metric("Saldo Real", f"R$ {saldo_mes:,.2f}")
+        c2.metric("Gastos", f"R$ {saidas_pagas:,.2f}")
+        c3.metric("Saldo", f"R$ {saldo_mes:,.2f}")
 
         if st.session_state.metas:
             with st.expander("🎯 Status das Metas"):
@@ -240,35 +257,33 @@ with aba_resumo:
 
         st.markdown(f"### Histórico")
         for idx, row in df_mes.sort_values(by='data', ascending=False).iterrows():
-            cor = "#10B981" if row['tipo'] == "Entrada" else "#EF4444"
+            cor = "#10B981" if row['tipo'] == "Entrada" else "#FF3B30"
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
             s_text = row.get('status', 'Pago')
             
-            # Cores para o badge de status (Novo: Em Negociação)
-            if s_text == "Pago": s_color, s_bg = "#10B981", "#D1FAE5"
-            elif s_text == "Pendente": s_color, s_bg = "#F59E0B", "#FEF3C7"
-            else: s_color, s_bg = "#3B82F6", "#DBEAFE" # Azul para Negociação
+            if s_text == "Pago": s_color, s_bg = "#34C759", "#E3FBE9"
+            elif s_text == "Pendente": s_color, s_bg = "#FF9500", "#FFF4E5"
+            else: s_color, s_bg = "#007AFF", "#E5F1FF"
             
-            # Acompanhamento por Vencimento
             txt_venc = ""
             if s_text == "Pendente" and row['tipo'] == "Saída":
                 dias_diff = (row['data'].date() - hoje).days
                 if dias_diff < 0:
-                    txt_venc = f" <span class='vencimento-alerta'>Atrasada há {-dias_diff} dias</span>"
+                    txt_venc = f" <span class='vencimento-alerta'>Atrasada {-dias_diff}d</span>"
                 elif dias_diff == 0:
-                    txt_venc = f" <span class='vencimento-alerta' style='color:#F59E0B'>Vence Hoje!</span>"
+                    txt_venc = f" <span class='vencimento-alerta' style='color:#FF9500'>Vence Hoje!</span>"
 
             st.markdown(f"""
                 <div class="transaction-card">
                     <div style="display: flex; align-items: center;">
                         <div class="card-icon">{icon}</div>
                         <div>
-                            <div style="font-weight: 600; color: #1E293B;">{row["descricao"]}</div>
-                            <div style="font-size: 11px; color: #64748B;">{row["data"].strftime('%d %b')}{txt_venc}</div>
+                            <div style="font-weight: 600; color: #1C1C1E; font-size:15px;">{row["descricao"]}</div>
+                            <div style="font-size: 12px; color: #8E8E93;">{row["data"].strftime('%d %b')}{txt_venc}</div>
                             <div class="status-badge" style="background: {s_bg}; color: {s_color};">{s_text}</div>
                         </div>
                     </div>
-                    <div style="color: {cor}; font-weight: 700;">R$ {row["valor"]:,.2f}</div>
+                    <div style="color: {cor}; font-weight: 700; font-size:16px;">R$ {row["valor"]:,.2f}</div>
                 </div>
             """, unsafe_allow_html=True)
             
@@ -279,7 +294,7 @@ with aba_resumo:
                     st.session_state.dados = buscar_dados(); st.rerun()
             with cd:
                 st.markdown('<div class="btn-excluir">', unsafe_allow_html=True)
-                if st.button("Excluir", key=f"del_{row['id']}"):
+                if st.button("Excluir Lançamento", key=f"del_{row['id']}"):
                     supabase.table("transacoes").delete().eq("id", row['id']).execute()
                     st.session_state.dados = buscar_dados(); st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -287,21 +302,22 @@ with aba_resumo:
     else: st.info("Toque em 'Novo' para começar!")
 
 with aba_novo:
-    aba_unit, aba_fixo = st.tabs(["Lançamento Único", "🗓️ Gerenciar Fixos"])
+    aba_unit, aba_fixo = st.tabs(["Lançamento Único", "🗓️ Fixos"])
     with aba_unit:
         with st.form("form_novo", clear_on_submit=True):
-            v = st.number_input("Valor", min_value=0.0); d = st.text_input("Descrição")
+            v = st.number_input("Valor", min_value=0.0)
+            d = st.text_input("Descrição")
             t = st.radio("Tipo", ["Saída", "Entrada"], horizontal=True)
-            # Lógica: Adicionado o status "Em Negociação"
             stat = st.selectbox("Status", ["Pago", "Pendente", "Em Negociação"])
-            c = st.selectbox("Categoria", CATEGORIAS); dt = st.date_input("Data/Vencimento", date.today())
+            c = st.selectbox("Categoria", CATEGORIAS)
+            dt = st.date_input("Data/Vencimento", date.today())
             fixo_check = st.checkbox("Salvar na lista de Fixos")
             if st.form_submit_button("Salvar"):
                 if v > 0:
                     supabase.table("transacoes").insert({"data": str(dt), "descricao": d, "valor": v, "tipo": t, "categoria": c, "status": stat}).execute()
                     if fixo_check: supabase.table("fixos").insert({"descricao": d, "valor": v, "categoria": c}).execute()
-                    st.success("Cadastrado!"); st.session_state.dados = buscar_dados(); st.session_state.fixos = buscar_fixos(); st.rerun()
-                else: st.error("O valor deve ser maior que zero.")
+                    st.success("Salvo!"); st.session_state.dados = buscar_dados(); st.session_state.fixos = buscar_fixos(); st.rerun()
+                else: st.error("Valor inválido.")
 
     with aba_fixo:
         if not st.session_state.fixos.empty:
@@ -315,16 +331,16 @@ with aba_novo:
                     new_desc = st.text_input("Editar Descrição", value=row['descricao'], key=f"ed_d_{row['id']}")
                     new_val = st.number_input("Editar Valor", value=float(row['valor']), key=f"ed_v_{row['id']}")
                     col_ed1, col_ed2 = st.columns(2)
-                    if col_ed1.button("Salvar Alterações", key=f"save_fix_{row['id']}"):
+                    if col_ed1.button("Salvar", key=f"save_fix_{row['id']}"):
                         supabase.table("fixos").update({"descricao": new_desc, "valor": new_val}).eq("id", row['id']).execute()
                         st.session_state.fixos = buscar_fixos(); st.rerun()
-                    if col_ed2.button("❌ Remover Fixo", key=f"del_fix_{row['id']}"):
+                    if col_ed2.button("❌ Remover", key=f"del_fix_{row['id']}"):
                         supabase.table("fixos").delete().eq("id", row['id']).execute()
                         st.session_state.fixos = buscar_fixos(); st.rerun()
         else: st.caption("Sem fixos configurados.")
 
 with aba_metas:
-    st.info("💡 Exemplo: Defina R$ 1.000,00 para '🛒 Mercado' para controlar seus gastos essenciais.")
+    st.info("💡 Defina limites para controlar seus gastos.")
     for cat in CATEGORIAS:
         if cat != "💰 Salário":
             atual_m = float(st.session_state.metas.get(cat, 0))
@@ -334,27 +350,24 @@ with aba_metas:
                 st.session_state.metas = buscar_metas(); st.rerun()
 
 with aba_reserva:
-    st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.8;font-size:14px;">PATRIMÔNIO REAL</p><h2>R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.8;font-size:14px;letter-spacing:1px;">PATRIMÔNIO REAL</p><h2 style="font-size:32px;margin-top:10px;">R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
     
-    # Resumo de Dívidas em Negociação
     if not df_geral.empty:
         total_negoc = df_geral[df_geral['status'] == "Em Negociação"]['valor'].sum()
         if total_negoc > 0:
-            st.warning(f"⚠️ Você possui **R$ {total_negoc:,.2f}** em dívidas em negociação (não afetando o patrimônio real).")
+            st.warning(f"⚠️ **R$ {total_negoc:,.2f}** em negociação (não afeta o patrimônio).")
 
     st.markdown("### 📄 Relatórios")
     if not df_mes.empty:
         col_rel1, col_rel2 = st.columns(2)
         with col_rel1:
-            st.download_button(label="📥 Baixar Excel", data=gerar_excel(df_mes), file_name=f"Financeiro_{mes_nome}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button(label="📥 Excel", data=gerar_excel(df_mes), file_name=f"Financeiro_{mes_nome}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         with col_rel2:
-            st.download_button(label="📥 Baixar PDF", data=gerar_pdf(df_mes, mes_nome), file_name=f"Financeiro_{mes_nome}.pdf", mime="application/pdf")
-    else:
-        st.caption("Selecione um mês com dados para gerar relatórios.")
+            st.download_button(label="📥 PDF", data=gerar_pdf(df_mes, mes_nome), file_name=f"Financeiro_{mes_nome}.pdf", mime="application/pdf")
+    else: st.caption("Sem dados para relatório.")
 
 with aba_sonhos:
     st.markdown("### 🎯 Calculadora de Sonhos")
-    st.info("💡 Exemplo: 'Viagem de Férias' ou 'Troca de Carro'.")
     v_sonho = st.number_input("Custo do Objetivo (R$)", min_value=0.0)
     if v_sonho > 0:
         try:
@@ -364,5 +377,5 @@ with aba_sonhos:
             if sobra_m > 0:
                 m_f = int(v_sonho / sobra_m) + 1
                 st.info(f"Faltam aprox. **{m_f} meses**."); st.progress(min(max(balanco/v_sonho, 0.0), 1.0))
-            else: st.warning("Economize este mês para alimentar seu sonho!")
-        except: st.info("Projeção indisponível no momento.")
+            else: st.warning("Economize este mês!")
+        except: st.info("Projeção indisponível.")
