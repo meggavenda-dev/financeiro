@@ -4,8 +4,14 @@ import pandas as pd
 from datetime import date
 from supabase import create_client, Client
 import io
-from fpdf import FPDF
 import streamlit.components.v1 as components
+
+# === NOVO: ReportLab para gerar PDF robusto (cabeçalho + paginação) ===
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
 
 # ================================
 # CONFIGURAÇÃO DA PÁGINA (MOBILE)
@@ -13,21 +19,14 @@ import streamlit.components.v1 as components
 st.set_page_config(
     page_title="Minha Casa",
     page_icon="🏡",
-    layout="wide",                      # Usa toda a largura no iPhone
-    initial_sidebar_state="collapsed"   # Esconde a sidebar por padrão
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 # =========================================================
 # INJEÇÃO DE METATAGS E ÍCONES NO <HEAD> (iOS e PWA)
 # =========================================================
 def inject_head_for_ios():
-    """
-    Injeta metatags no HEAD para iPhone/iOS:
-      - viewport-fit=cover (safe-area notch/gestures)
-      - app-capable + status-bar-style
-      - múltiplos tamanhos de apple-touch-icon para compatibilidade antiga
-      - evita auto link de telefone
-    """
     components.html("""
     <script>
     (function(){
@@ -38,19 +37,16 @@ def inject_head_for_ios():
           for (const [k,v] of Object.entries(attrs)) el.setAttribute(k, v);
           head.appendChild(el);
         }
-        // Remove viewports existentes e aplica o ideal p/ iOS
+        // Viewport ideal para iOS (safe-area)
         [...head.querySelectorAll('meta[name="viewport"]')].forEach(m => m.remove());
         add('meta', { name:'viewport', content:'width=device-width, initial-scale=1, viewport-fit=cover, shrink-to-fit=no' });
-
         // PWA light no iOS
         add('meta', { name:'apple-mobile-web-app-capable', content:'yes' });
         add('meta', { name:'apple-mobile-web-app-status-bar-style', content:'black-translucent' });
         add('meta', { name:'apple-mobile-web-app-title', content:'Minha Casa' });
-
-        // Evita autolink de telefone em iOS antigo
+        // Evita autolink de telefone
         add('meta', { name:'format-detection', content:'telephone=no' });
-
-        // Ícones (substitua as URLs pelos seus se quiser)
+        // Ícones (troque pelas suas imagens se quiser)
         const icon180 = 'https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png';
         ['180x180','152x152','120x120','76x76'].forEach(size => {
           add('link', { rel:'apple-touch-icon', sizes:size, href: icon180 });
@@ -69,24 +65,13 @@ inject_head_for_ios()
 # =========================================================
 st.markdown("""
 <style>
-/* ========= PALETA MID-CONTRAST (claro por padrão) ========= */
 :root{
-  --bg:#F3F5F9;      /* cinza claro (não estoura como branco 100%) */
-  --text:#0A1628;    /* texto principal bem escuro */
-  --muted:#334155;   /* texto secundário */
-  --brand:#2563EB;   /* azul */
-  --brand-600:#1D4ED8;
-  --ok:#0EA5A4;
-  --warn:#D97706;
-  --danger:#DC2626;
-  --card:#FFFFFF;    /* cards brancos */
-  --line:#D6DEE8;    /* borda nítida */
-  --soft-line:#E6ECF3;
+  --bg:#F3F5F9; --text:#0A1628; --muted:#334155;
+  --brand:#2563EB; --brand-600:#1D4ED8;
+  --ok:#0EA5A4; --warn:#D97706; --danger:#DC2626;
+  --card:#FFFFFF; --line:#D6DEE8; --soft-line:#E6ECF3;
 }
-
-html, body, [class*="css"] {
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-}
+html, body, [class*="css"] { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
 html, body { background: var(--bg); color: var(--text); -webkit-text-size-adjust: 100%; }
 .stApp { background: var(--bg); }
 
@@ -98,22 +83,16 @@ html, body { background: var(--bg); color: var(--text); -webkit-text-size-adjust
   }
 }
 
-/* Inputs >= 16px => sem zoom no iOS, mais contraste */
+/* Inputs >=16px (sem zoom no iOS) */
 input, select, textarea,
 .stTextInput input, .stNumberInput input, .stDateInput input,
 .stSelectbox div[data-baseweb="select"] {
   font-size: 16px !important; color: var(--text) !important;
 }
 .stTextInput input, .stNumberInput input, .stDateInput input {
-  background: var(--card) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 12px !important;
+  background: var(--card) !important; border: 1px solid var(--line) !important; border-radius: 12px !important;
 }
-.stSelectbox > div[data-baseweb="select"]{
-  background: var(--card) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 12px !important;
-}
+.stSelectbox > div[data-baseweb="select"]{ background: var(--card) !important; border: 1px solid var(--line) !important; border-radius: 12px !important; }
 ::placeholder { color: #475569 !important; opacity: 1 !important; }
 .stSelectbox svg, .stNumberInput svg { color: #1F2937 !important; opacity: 1 !important; }
 
@@ -126,29 +105,20 @@ input, select, textarea,
 }
 .slogan { color: var(--muted); font-size: .95rem; font-weight: 600; }
 
-/* Abas (claras com contraste) */
+/* Abas */
 .stTabs [data-baseweb="tab-list"]{
-  display:flex; gap:6px; width:100%;
-  background:#E9EEF5; border:1px solid var(--line); border-radius:16px; padding:4px;
+  display:flex; gap:6px; width:100%; background:#E9EEF5; border:1px solid var(--line); border-radius:16px; padding:4px;
 }
 .stTabs [data-baseweb="tab"]{
   flex:1 1 auto; text-align:center; background:transparent; border-radius:12px;
-  padding:12px 6px !important; color: var(--muted); font-size:14px; font-weight:800;
-  border:none !important;
+  padding:12px 6px !important; color: var(--muted); font-size:14px; font-weight:800; border:none !important;
 }
-.stTabs [aria-selected="true"]{
-  background: var(--card) !important; color: var(--brand) !important;
-  box-shadow: 0 1px 4px rgba(0,0,0,.06);
-  border:1px solid var(--line);
-}
+.stTabs [aria-selected="true"]{ background: var(--card) !important; color: var(--brand) !important; box-shadow: 0 1px 4px rgba(0,0,0,.06); border:1px solid var(--line); }
 
-/* Métricas (legíveis no claro) */
+/* Métricas */
 [data-testid="stMetric"]{
-  background: var(--card);
-  border-radius: 14px; padding: 14px;
-  border: 1px solid var(--line);
-  box-shadow: 0 1px 6px rgba(0,0,0,.05);
-  color: var(--text);
+  background: var(--card); border-radius: 14px; padding: 14px; border: 1px solid var(--line);
+  box-shadow: 0 1px 6px rgba(0,0,0,.05); color: var(--text);
 }
 [data-testid="stMetric"] * { opacity: 1 !important; color: var(--text) !important; }
 [data-testid="stMetricLabel"] { color: #0F172A !important; font-weight: 800 !important; }
@@ -158,106 +128,59 @@ input, select, textarea,
 .stButton>button{
   width:100%; min-height:46px; border-radius:12px; background: var(--brand);
   color:#fff; border:1px solid #1E40AF; padding:10px 14px; font-weight:800; letter-spacing:.2px;
-  box-shadow: 0 1px 8px rgba(29,78,216,.18);
-  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+  box-shadow: 0 1px 8px rgba(29,78,216,.18); transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
 }
 .stButton>button:active{ transform: scale(.98); }
 .stButton>button:hover{ background: var(--brand-600); }
 
-/* Botão Excluir (texto, sem “pill” azul) */
-.btn-excluir > div > button{
-  background: transparent !important; color: var(--danger) !important;
-  border: none !important; font-size: 14px !important; font-weight: 800 !important;
-  min-height: 42px !important; box-shadow:none !important;
-}
+/* Botão Excluir */
+.btn-excluir > div > button{ background: transparent !important; color: var(--danger) !important; border: none !important; font-size: 14px !important; font-weight: 800 !important; min-height: 42px !important; box-shadow:none !important; }
 
-/* ===== Cards de transação — correção do overlap ===== */
+/* Cards de transação (sem overlap) */
 .transaction-card{
-  background: var(--card); padding: 12px; border-radius: 14px;
-  margin-bottom: 10px; display:flex; justify-content:space-between; gap:12px;
-  align-items:flex-start; border:1px solid var(--line);
-  box-shadow: 0 1px 6px rgba(0,0,0,.05); color: var(--text);
+  background: var(--card); padding: 12px; border-radius: 14px; margin-bottom: 10px; display:flex; justify-content:space-between; gap:12px;
+  align-items:flex-start; border:1px solid var(--line); box-shadow: 0 1px 6px rgba(0,0,0,.05); color: var(--text);
 }
-.transaction-left{
-  display:flex; align-items:flex-start; gap:12px; min-width:0;
-}
-.card-icon{
-  background: #EBF1FA; width: 42px; height: 42px; border-radius: 10px;
-  display:flex; align-items:center; justify-content:center; font-size: 20px; color:#0F172A;
-  flex:0 0 42px;
-}
-.tc-info{
-  display:flex; flex-direction:column; gap:4px; min-width:0; /* evita quebra por cima */
-}
-.tc-title{
-  font-weight: 700; color: #0A1628; line-height: 1.15; word-break: break-word;
-}
-.tc-meta{
-  font-size: 12px; color: #334155; line-height: 1.1;
-}
-.status-badge{
-  font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 900;
-  text-transform: uppercase; display:inline-block; letter-spacing:.2px; width: fit-content;
-}
+.transaction-left{ display:flex; align-items:flex-start; gap:12px; min-width:0; }
+.card-icon{ background: #EBF1FA; width: 42px; height: 42px; border-radius: 10px; display:flex; align-items:center; justify-content:center; font-size: 20px; color:#0F172A; flex:0 0 42px; }
+.tc-info{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+.tc-title{ font-weight: 700; color: #0A1628; line-height: 1.15; word-break: break-word; }
+.tc-meta{ font-size: 12px; color: #334155; line-height: 1.1; }
+.status-badge{ font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 900; text-transform: uppercase; display:inline-block; letter-spacing:.2px; width: fit-content; }
 .status-badge.pago{ background:#DCFCE7; color:#065F46; border:1px solid #86EFAC; }
 .status-badge.pendente{ background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; }
 .status-badge.negociacao{ background:#DBEAFE; color:#1E3A8A; border:1px solid #93C5FD; }
-
-.transaction-right{
-  color:#0A1628; font-weight: 800; white-space: nowrap; margin-left:auto;
-}
+.transaction-right{ color:#0A1628; font-weight: 800; white-space: nowrap; margin-left:auto; }
 .transaction-right.entrada{ color:#0EA5A4; }
 .transaction-right.saida{ color:#DC2626; }
 
-/* Vencimento visível */
 .vencimento-alerta { color: #B91C1C; font-size: 12px; font-weight: 800; }
 
-/* Card Patrimônio (claro) */
-.reserva-card{
-  background: linear-gradient(135deg, #F8FAFF 0%, #E9EEF7 100%);
-  color: #0A1628; padding: 18px; border-radius: 14px; text-align: center;
-  box-shadow: 0 1px 8px rgba(0,0,0,.06); border:1px solid var(--line);
-}
+/* Card Patrimônio */
+.reserva-card{ background: linear-gradient(135deg, #F8FAFF 0%, #E9EEF7 100%); color: #0A1628; padding: 18px; border-radius: 14px; text-align: center; box-shadow: 0 1px 8px rgba(0,0,0,.06); border:1px solid var(--line); }
 
 /* Metas */
-.meta-container{
-  background:#F6F9FC; border:1px solid var(--line);
-  border-radius:10px; padding:10px; margin-bottom:8px;
-  color:#0A1628; font-weight:600;
-}
+.meta-container{ background:#F6F9FC; border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:8px; color:#0A1628; font-weight:600; }
 
 /* Expanders */
-[data-testid="stExpander"] > details{
-  border:1px solid var(--line); border-radius:14px; padding:6px 10px; background: var(--card);
-}
+[data-testid="stExpander"] > details{ border:1px solid var(--line); border-radius:14px; padding:6px 10px; background: var(--card); }
 [data-testid="stExpander"] summary { padding:10px; font-weight: 800; color: var(--text); }
 
-/* Colunas no iPhone */
-@media (max-width: 480px){
-  [data-testid="column"]{ width:100% !important; flex:1 1 100% !important; }
-  .main-title{ font-size:1.65rem; }
-}
+/* iPhone */
+@media (max-width: 480px){ [data-testid="column"]{ width:100% !important; flex:1 1 100% !important; } .main-title{ font-size:1.65rem; } }
 
-/* Remover itens padrão do Streamlit */
+/* Limpeza */
 #MainMenu, footer, header{ visibility: hidden; }
 .block-container{ padding-top: 0.9rem !important; }
 
-/* ========= DARK MODE autom. (mais claro que o anterior) ========= */
+/* Dark Mode moderado */
 @media (prefers-color-scheme: dark){
-  :root{
-    --bg:#0F172A; --text:#E7EEF8; --muted:#C8D4EE;
-    --card:#141C2F; --line:#24324A; --soft-line:#1F2A3E;
-    --brand:#7AA7FF; --brand-600:#5E90FF;
-    --ok:#34D399; --warn:#FBBF24; --danger:#F87171;
-  }
+  :root{ --bg:#0F172A; --text:#E7EEF8; --muted:#C8D4EE; --card:#141C2F; --line:#24324A; --soft-line:#1F2A3E; --brand:#7AA7FF; --brand-600:#5E90FF; --ok:#34D399; --warn:#FBBF24; --danger:#F87171; }
   html, body { background: var(--bg); color: var(--text); }
   .stApp, .block-container { background: var(--bg); }
   .stTabs [data-baseweb="tab-list"]{ background:#18223A; border-color:#25314A; }
   .stTabs [aria-selected="true"]{ border-color:#2E3C59; box-shadow: 0 1px 6px rgba(0,0,0,.35); }
-
-  .transaction-card, [data-testid="stMetric"], [data-testid="stExpander"] > details{
-    background: var(--card); border-color:#2A3952; box-shadow: 0 1px 10px rgba(0,0,0,.32);
-  }
+  .transaction-card, [data-testid="stMetric"], [data-testid="stExpander"] > details{ background: var(--card); border-color:#2A3952; box-shadow: 0 1px 10px rgba(0,0,0,.32); }
   .card-icon{ background:#223049; color:#E5E7EB; }
   .slogan{ color:#B8C3D9; }
   ::placeholder{ color:#A8B5CC !important; }
@@ -285,7 +208,6 @@ def buscar_dados():
     colunas = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status']
     if df.empty:
         return pd.DataFrame(columns=colunas)
-    # Normaliza tipos
     df['data'] = pd.to_datetime(df['data'], errors='coerce')
     if 'status' not in df.columns:
         df['status'] = 'Pago'
@@ -310,137 +232,92 @@ def gerar_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_exp = df.copy()
-        # Garante data formatada
         df_exp['data'] = pd.to_datetime(df_exp['data'], errors='coerce').dt.strftime('%d/%m/%Y')
         df_exp.to_excel(writer, index=False, sheet_name='Lançamentos')
     return output.getvalue()
 
 def gerar_pdf(df, nome_mes):
     """
-    Gera um PDF tabular com quebra de página, repetição de cabeçalho
-    e colunas dimensionadas para A4 retrato. NÃO descarta linhas.
+    Gera PDF com ReportLab (tabela com cabeçalho repetido e paginação automática).
+    Nenhuma linha é descartada.
     """
-    # Se vier nulo ou vazio, gera um PDF informativo
-    if df is None or df.empty:
-        pdf = FPDF(orientation='P', unit='mm', format='A4')
-        pdf.add_page()
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(0, 10, f"Relatorio Financeiro - {nome_mes}", ln=True, align='C')
-        pdf.ln(10)
-        pdf.set_font("Helvetica", "", 12)
-        pdf.cell(0, 8, "Sem lancamentos no periodo.", ln=True)
-        try:
-            return bytes(pdf.output())
-        except Exception:
-            return pdf.output(dest="S").encode("latin-1", "replace")
+    buffer = io.BytesIO()
 
-    # Cópia + sanitização sem excluir linhas
+    # Sanitiza (sem dropar linhas)
     df_exp = df.copy()
-
-    # Normaliza tipos sem dropar: data->datetime (erros viram NaT, mas mantemos a linha)
-    if 'data' in df_exp.columns:
-        df_exp['data'] = pd.to_datetime(df_exp['data'], errors='coerce')
-
-    # Colunas auxiliares
-    df_exp['data_fmt'] = df_exp['data'].dt.strftime('%d/%m/%Y')
-    df_exp['data_fmt'] = df_exp['data_fmt'].fillna('')  # se NaT, fica vazio
+    df_exp['data'] = pd.to_datetime(df_exp['data'], errors='coerce')
+    df_exp['data_fmt'] = df_exp['data'].dt.strftime('%d/%m/%Y').fillna('')
     df_exp['descricao'] = df_exp['descricao'].fillna('').astype(str)
     df_exp['valor'] = pd.to_numeric(df_exp['valor'], errors='coerce').fillna(0.0)
-    if 'tipo' not in df_exp.columns: df_exp['tipo'] = ''
-    if 'status' not in df_exp.columns: df_exp['status'] = 'Pago'
-    df_exp['tipo'] = df_exp['tipo'].fillna('').astype(str)
+    df_exp['tipo'] = df_exp.get('tipo', '').fillna('').astype(str)
+    df_exp['status'] = df_exp.get('status', 'Pago')
+    if not isinstance(df_exp['status'], pd.Series):
+        df_exp['status'] = 'Pago'
     df_exp['status'] = df_exp['status'].fillna('Pago').astype(str)
 
-    # Ordena por data (NaT no fim), depois descrição
-    if 'data' in df_exp.columns:
-        df_exp = df_exp.sort_values(by=['data', 'descricao'], na_position='last')
-    else:
-        df_exp = df_exp.sort_values(by=['descricao'])
+    # Ordena como no histórico
+    df_exp = df_exp.sort_values(by=['data', 'descricao'], na_position='last')
 
-    # Configuração do PDF
-    pdf = FPDF(orientation='P', unit='mm', format='A4')
-    pdf.set_auto_page_break(auto=True, margin=15)  # margem para rodapé
-    pdf.add_page()
+    # Documento
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=12*mm, rightMargin=12*mm,
+        topMargin=14*mm, bottomMargin=14*mm
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'TitleCenter',
+        parent=styles['Heading1'],
+        alignment=1,  # center
+        fontName='Helvetica-Bold',
+        fontSize=16,
+        leading=20,
+        spaceAfter=6
+    )
+    normal_style = styles['Normal']
 
-    # Medidas
-    left_margin = 10
-    right_margin = 10
-    page_w = 210
-    usable_w = page_w - left_margin - right_margin
+    elements = []
+    elements.append(Paragraph(f"Relatorio Financeiro - {nome_mes}", title_style))
+    elements.append(Spacer(1, 6))
 
-    # Larguras das colunas (somatório == usable_w)
-    col_w = {
-        "Data": 22,
-        "Descricao": 92,
-        "Valor": 28,
-        "Tipo": 24,
-        "Status": 24,
-    }
-    total_w = sum(col_w.values())
-    if abs(total_w - usable_w) > 0.5:
-        escala = usable_w / total_w
-        for k in col_w:
-            col_w[k] = round(col_w[k] * escala, 2)
+    # Tabela
+    header = ["Data", "Descricao", "Valor", "Tipo", "Status"]
+    data_rows = []
+    for _, r in df_exp.iterrows():
+        valor_txt = f"R$ {r['valor']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        data_rows.append([r['data_fmt'], r['descricao'], valor_txt, r['tipo'], r['status']])
 
-    row_h = 8
-    header_h = 9
+    table_data = [header] + data_rows
 
-    def draw_title():
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(0, 10, f"Relatorio Financeiro - {nome_mes}", ln=True, align='C')
-        pdf.ln(2)
+    # Larguras para A4 (somam ~ 186mm -> dentro das margens)
+    col_widths = [25*mm, 90*mm, 28*mm, 23*mm, 20*mm]
 
-    def draw_header():
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.set_fill_color(230, 236, 245)
-        pdf.set_draw_color(200, 210, 220)
-        pdf.set_text_color(20, 30, 40)
-        pdf.cell(col_w["Data"],     header_h, "Data",      border=1, ln=0, align='C', fill=True)
-        pdf.cell(col_w["Descricao"], header_h, "Descricao", border=1, ln=0, align='C', fill=True)
-        pdf.cell(col_w["Valor"],    header_h, "Valor",     border=1, ln=0, align='C', fill=True)
-        pdf.cell(col_w["Tipo"],     header_h, "Tipo",      border=1, ln=0, align='C', fill=True)
-        pdf.cell(col_w["Status"],   header_h, "Status",    border=1, ln=1, align='C', fill=True)
-        pdf.set_text_color(0, 0, 0)
+    tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
+    tbl.setStyle(TableStyle([
+        ('FONT', (0,0), (-1,0), 'Helvetica-Bold', 10),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#E6ECF5")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor("#141A22")),
+        ('ALIGN', (0,0), (-1,0), 'CENTER'),
 
-    def ensure_space(next_block_height):
-        # Se não houver espaço para a próxima linha, cria nova página e redesenha header
-        if pdf.get_y() + next_block_height + 15 > pdf.h:
-            pdf.add_page()
-            draw_header()
+        ('FONT', (0,1), (-1,-1), 'Helvetica', 9),
+        ('TEXTCOLOR', (0,1), (-1,-1), colors.black),
 
-    draw_title()
-    draw_header()
-    pdf.set_font("Helvetica", "", 9)
+        ('ALIGN', (2,1), (2,-1), 'RIGHT'),     # Valor
+        ('ALIGN', (0,1), (0,-1), 'CENTER'),    # Data
+        ('ALIGN', (3,1), (4,-1), 'CENTER'),    # Tipo/Status
 
-    for _, row in df_exp.iterrows():
-        ensure_space(row_h)
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#C8D2DC")),
 
-        # Data
-        pdf.cell(col_w["Data"], row_h, row["data_fmt"], border=1, ln=0, align='C')
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#FAFBFD")]),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
 
-        # Descrição (trunca em 1 linha com "…", sem remover a linha)
-        desc = str(row["descricao"])
-        max_w = col_w["Descricao"] - 2
-        while pdf.get_string_width(desc) > max_w and len(desc) > 0:
-            desc = desc[:-1]
-        if desc != str(row["descricao"]) and len(desc) >= 1:
-            desc = desc[:-1] + "…"
-        pdf.cell(col_w["Descricao"], row_h, desc, border=1, ln=0, align='L')
-
-        # Valor (pt-BR simples)
-        valor_txt = f"R$ {row['valor']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        pdf.cell(col_w["Valor"], row_h, valor_txt, border=1, ln=0, align='R')
-
-        # Tipo
-        pdf.cell(col_w["Tipo"], row_h, row["tipo"], border=1, ln=0, align='C')
-
-        # Status
-        pdf.cell(col_w["Status"], row_h, row["status"], border=1, ln=1, align='C')
-
-    try:
-        return bytes(pdf.output())
-    except Exception:
-        return pdf.output(dest="S").encode("latin-1", "replace")
+    elements.append(tbl)
+    doc.build(elements)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes
 
 # ============================
 # SINCRONIZAÇÃO INICIAL
@@ -487,7 +364,6 @@ balanco = 0.0
 
 if not df_geral.empty:
     total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum()
-    # Somente Saídas pagas entram no balanço
     total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
     balanco = total_in - total_out_pagas
 
@@ -509,7 +385,7 @@ if not df_geral.empty:
 aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
 
 with aba_resumo:
-    # Controle de Atrasados (Passado)
+    # Atrasados (passado)
     if not df_atrasados_passado.empty:
         total_atrasado = df_atrasados_passado['valor'].sum()
         with st.expander(f"⚠️ CONTAS PENDENTES DE MESES ANTERIORES: R$ {total_atrasado:,.2f}", expanded=True):
@@ -541,12 +417,10 @@ with aba_resumo:
 
         st.markdown("### Histórico")
         for idx, row in df_mes.sort_values(by='data', ascending=False).iterrows():
-            # Classes/cores para valor
             valor_class = "entrada" if row['tipo'] == "Entrada" else "saida"
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
             s_text = row.get('status', 'Pago')
 
-            # Classe do badge
             if s_text == "Pago":
                 s_class = "pago"
             elif s_text == "Pendente":
@@ -554,7 +428,6 @@ with aba_resumo:
             else:
                 s_class = "negociacao"
 
-            # Vencimento
             txt_venc = ""
             if s_text == "Pendente" and row['tipo'] == "Saída":
                 dias_diff = (row['data'].date() - hoje).days
@@ -563,7 +436,6 @@ with aba_resumo:
                 elif dias_diff == 0:
                     txt_venc = f" <span class='vencimento-alerta' style='color:#D97706'>Vence Hoje!</span>"
 
-            # ---- CARD DE TRANSAÇÃO (layout corrigido) ----
             st.markdown(f"""
               <div class="transaction-card">
                 <div class="transaction-left">
@@ -672,7 +544,7 @@ with aba_reserva:
 
     st.markdown("### 📄 Relatórios")
 
-    # >>> Recalcula o DF para o período selecionado no momento do download
+    # >>> Recalcula o DF no momento do download (evita staleness)
     if not st.session_state.dados.empty:
         df_para_relatorio = st.session_state.dados.copy()
         df_para_relatorio['data'] = pd.to_datetime(df_para_relatorio['data'], errors='coerce')
@@ -683,7 +555,7 @@ with aba_reserva:
         df_para_relatorio = df_para_relatorio[mask].copy()
         df_para_relatorio = df_para_relatorio.sort_values(by=['data', 'descricao'], na_position='last')
 
-        # Debug rápido: quantas linhas irão para o arquivo?
+        # Debug: quantas linhas vão?
         st.caption(f"🧾 Lançamentos no relatório: **{len(df_para_relatorio)}**")
 
         if not df_para_relatorio.empty:
