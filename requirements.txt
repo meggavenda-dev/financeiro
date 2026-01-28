@@ -4,3 +4,4 @@ plotly
 supabase
 fpdf2
 xlsxwriter
+reportlab
