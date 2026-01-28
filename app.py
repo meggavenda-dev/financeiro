@@ -37,19 +37,25 @@ def login():
         pass_input = st.text_input("Senha", type="password")
         
         if st.button("Entrar"):
-            # Busca o usuário pelo nome
-            res = supabase.table("usuarios").select("nome, password_hash").eq("nome", user_input).execute()
+            # .strip() remove espaços acidentais antes ou depois do texto
+            user_clean = user_input.strip()
+            pass_clean = pass_input.strip()
+
+            res = supabase.table("usuarios").select("nome, password_hash").eq("nome", user_clean).execute()
             
             if res.data:
-                stored_hash = res.data[0]['password_hash']
-                # Verifica se a senha digitada corresponde ao hash no banco
-                if bcrypt.checkpw(pass_input.encode('utf-8'), stored_hash.encode('utf-8')):
-                    st.session_state.logged_in = True
-                    st.session_state.user_name = res.data[0]['nome']
-                    st.success("Login realizado!")
-                    st.rerun()
-                else:
-                    st.error("Senha incorreta.")
+                stored_hash = res.data[0]['password_hash'].strip() # Limpa o hash vindo do banco
+                
+                try:
+                    # Compara a senha digitada com o hash
+                    if bcrypt.checkpw(pass_clean.encode('utf-8'), stored_hash.encode('utf-8')):
+                        st.session_state.logged_in = True
+                        st.session_state.user_name = res.data[0]['nome']
+                        st.rerun()
+                    else:
+                        st.error("Senha incorreta.")
+                except Exception as e:
+                    st.error("Erro no formato da senha salva no banco.")
             else:
                 st.error("Usuário não encontrado.")
 
