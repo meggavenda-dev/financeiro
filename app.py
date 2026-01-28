@@ -4,14 +4,8 @@ import pandas as pd
 from datetime import date
 from supabase import create_client, Client
 import io
+from fpdf import FPDF
 import streamlit.components.v1 as components
-
-# === NOVO: ReportLab para gerar PDF robusto (cabeçalho + paginação) ===
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import mm
 
 # ================================
 # CONFIGURAÇÃO DA PÁGINA (MOBILE)
@@ -37,15 +31,18 @@ def inject_head_for_ios():
           for (const [k,v] of Object.entries(attrs)) el.setAttribute(k, v);
           head.appendChild(el);
         }
-        // Viewport ideal para iOS (safe-area)
+        // Viewport ideal p/ iOS (safe-area)
         [...head.querySelectorAll('meta[name="viewport"]')].forEach(m => m.remove());
         add('meta', { name:'viewport', content:'width=device-width, initial-scale=1, viewport-fit=cover, shrink-to-fit=no' });
+
         // PWA light no iOS
         add('meta', { name:'apple-mobile-web-app-capable', content:'yes' });
         add('meta', { name:'apple-mobile-web-app-status-bar-style', content:'black-translucent' });
         add('meta', { name:'apple-mobile-web-app-title', content:'Minha Casa' });
+
         // Evita autolink de telefone
         add('meta', { name:'format-detection', content:'telephone=no' });
+
         // Ícones (troque pelas suas imagens se quiser)
         const icon180 = 'https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png';
         ['180x180','152x152','120x120','76x76'].forEach(size => {
@@ -61,7 +58,7 @@ inject_head_for_ios()
 
 # =========================================================
 # CSS MID-CONTRAST (claro por padrão) + Dark Mode moderado
-# Corrige: pouca legibilidade no claro + overlap do ícone
+# (Mesma base já enviada; mantive para iPhone e boa legibilidade)
 # =========================================================
 st.markdown("""
 <style>
@@ -77,10 +74,7 @@ html, body { background: var(--bg); color: var(--text); -webkit-text-size-adjust
 
 /* Safe-area iOS */
 @supports(padding: max(0px)) {
-  .stApp, .block-container {
-    padding-top: max(10px, env(safe-area-inset-top)) !important;
-    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
-  }
+  .stApp, .block-container { padding-top: max(10px, env(safe-area-inset-top)) !important; padding-bottom: max(12px, env(safe-area-inset-bottom)) !important; }
 }
 
 /* Inputs >=16px (sem zoom no iOS) */
@@ -200,10 +194,122 @@ except Exception as e:
     st.stop()
 
 # ============================
+# AUTENTICAÇÃO (Supabase Auth)
+# ============================
+def get_current_user():
+    """Obtém o usuário autenticado do Supabase (ou None)."""
+    try:
+        resp = supabase.auth.get_user()
+        user = getattr(resp, "user", None)
+        # Em alguns ambientes, resp pode ser dict-like:
+        if user is None and isinstance(resp, dict):
+            user = resp.get("user")
+        return user
+    except Exception:
+        return None
+
+def show_auth_ui():
+    st.markdown("### 🔐 Acesso")
+    tab_login, tab_signup = st.tabs(["Entrar", "Cadastrar"])
+
+    with tab_login:
+        with st.form("form_login", clear_on_submit=False):
+            email = st.text_input("E-mail", key="login_email")
+            pwd = st.text_input("Senha", type="password", key="login_pwd")
+            ok = st.form_submit_button("Entrar")
+            if ok:
+                try:
+                    supabase.auth.sign_in_with_password({"email": email, "password": pwd})
+                    st.success("Login realizado!")
+                    st.session_state["auth_user"] = get_current_user()
+                    st.rerun()
+                except Exception as e:
+                    st.error("Falha no login. Verifique e-mail/senha.")
+
+    with tab_signup:
+        with st.form("form_signup", clear_on_submit=False):
+            nome = st.text_input("Nome", key="signup_nome")
+            email = st.text_input("E-mail", key="signup_email")
+            pwd = st.text_input("Senha", type="password", key="signup_pwd")
+            ok = st.form_submit_button("Criar conta")
+            if ok:
+                try:
+                    supabase.auth.sign_up({"email": email, "password": pwd})
+                    # Se o projeto exigir confirmação por e-mail, o user pode vir None aqui.
+                    user = get_current_user()
+                    if user:
+                        # Salva/atualiza perfil em 'usuarios'
+                        try:
+                            supabase.table("usuarios").upsert({
+                                "user_id": user.id,
+                                "email": email,
+                                "nome": nome or "",
+                            }).execute()
+                        except Exception:
+                            pass
+                        st.session_state["auth_user"] = user
+                        st.success("Conta criada! Você já está autenticado.")
+                        st.rerun()
+                    else:
+                        st.info("Conta criada! Verifique seu e-mail para confirmar o cadastro.")
+                except Exception as e:
+                    st.error("Falha ao cadastrar. Verifique o e-mail e tente novamente.")
+
+def require_auth():
+    """Exibe tela de login se não houver usuário; retorna user autenticado."""
+    if "auth_user" not in st.session_state or st.session_state["auth_user"] is None:
+        st.session_state["auth_user"] = get_current_user()
+    if st.session_state["auth_user"] is None:
+        show_auth_ui()
+        st.stop()
+    return st.session_state["auth_user"]
+
+user = require_auth()
+user_id = user.id if user else None
+
+# Botão de sair
+with st.sidebar:
+    st.caption(f"Conectado: **{getattr(user, 'email', '')}**")
+    if st.button("Sair"):
+        try:
+            supabase.auth.sign_out()
+        except Exception:
+            pass
+        st.session_state["auth_user"] = None
+        st.experimental_set_query_params()  # limpa cache de URL
+        st.rerun()
+
+# ============================
+# SUPORTE A user_id (fallback)
+# ============================
+@st.cache_data(show_spinner=False)
+def _table_supports_user_id(table: str) -> bool:
+    try:
+        # Tentamos filtrar pela coluna; se existir, a API executa sem erro.
+        supabase.table(table).select("*").eq("user_id", user_id).limit(1).execute()
+        return True
+    except Exception:
+        return False
+
+SUPPORTS_USER_ID = {
+    "transacoes": _table_supports_user_id("transacoes"),
+    "metas": _table_supports_user_id("metas"),
+    "fixos": _table_supports_user_id("fixos"),
+}
+
+def f_eq_user(q, table):
+    """Aplica filtro por user_id se a tabela suportar a coluna."""
+    if user_id and SUPPORTS_USER_ID.get(table, False):
+        return q.eq("user_id", user_id)
+    return q
+
+# ============================
 # FUNÇÕES DE BANCO DE DADOS
 # ============================
 def buscar_dados():
-    res = supabase.table("transacoes").select("*").execute()
+    q = supabase.table("transacoes").select("*")
+    q = f_eq_user(q, "transacoes")
+    res = q.execute()
     df = pd.DataFrame(res.data)
     colunas = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status']
     if df.empty:
@@ -215,11 +321,20 @@ def buscar_dados():
     return df
 
 def buscar_metas():
-    res = supabase.table("metas").select("*").execute()
-    return {item['categoria']: item['limite'] for item in res.data} if res.data else {}
+    q = supabase.table("metas").select("*")
+    q = f_eq_user(q, "metas")
+    res = q.execute()
+    data = res.data or []
+    # Estrutura esperada: {categoria: limite}
+    metas = {}
+    for item in data:
+        metas[item.get('categoria')] = item.get('limite', 0)
+    return metas
 
 def buscar_fixos():
-    res = supabase.table("fixos").select("*").execute()
+    q = supabase.table("fixos").select("*")
+    q = f_eq_user(q, "fixos")
+    res = q.execute()
     df = pd.DataFrame(res.data)
     if df.empty:
         return pd.DataFrame(columns=['id', 'descricao', 'valor', 'categoria'])
@@ -238,99 +353,99 @@ def gerar_excel(df):
 
 def gerar_pdf(df, nome_mes):
     """
-    Gera PDF com ReportLab (tabela com cabeçalho repetido e paginação automática).
-    Nenhuma linha é descartada.
+    Gera um PDF com FPDF, repetindo cabeçalho em cada página e sem descartar linhas.
+    Evita erros de codificação convertendo texto para latin-1-safe.
     """
-    buffer = io.BytesIO()
+    def safe_text(x: object) -> str:
+        s = "" if x is None else str(x)
+        return s.encode('latin-1', 'replace').decode('latin-1')
 
-    # Sanitiza (sem dropar linhas)
     df_exp = df.copy()
     df_exp['data'] = pd.to_datetime(df_exp['data'], errors='coerce')
     df_exp['data_fmt'] = df_exp['data'].dt.strftime('%d/%m/%Y').fillna('')
     df_exp['descricao'] = df_exp['descricao'].fillna('').astype(str)
     df_exp['valor'] = pd.to_numeric(df_exp['valor'], errors='coerce').fillna(0.0)
-    df_exp['tipo'] = df_exp.get('tipo', '').fillna('').astype(str)
-    df_exp['status'] = df_exp.get('status', 'Pago')
-    if not isinstance(df_exp['status'], pd.Series):
-        df_exp['status'] = 'Pago'
+    if 'tipo' not in df_exp.columns: df_exp['tipo'] = ''
+    if 'status' not in df_exp.columns: df_exp['status'] = 'Pago'
+    df_exp['tipo'] = df_exp['tipo'].fillna('').astype(str)
     df_exp['status'] = df_exp['status'].fillna('Pago').astype(str)
-
-    # Ordena como no histórico
     df_exp = df_exp.sort_values(by=['data', 'descricao'], na_position='last')
 
-    # Documento
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=12*mm, rightMargin=12*mm,
-        topMargin=14*mm, bottomMargin=14*mm
-    )
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'TitleCenter',
-        parent=styles['Heading1'],
-        alignment=1,  # center
-        fontName='Helvetica-Bold',
-        fontSize=16,
-        leading=20,
-        spaceAfter=6
-    )
-    normal_style = styles['Normal']
+    pdf = FPDF(orientation='P', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=False)
+    pdf.add_page()
+    pdf.set_margins(10, 10, 10)
+    left_margin = 10
+    top_margin = 10
+    bottom_margin = 15
+    page_w, page_h = 210, 297
+    col_w = {"Data": 22, "Descricao": 92, "Valor": 28, "Tipo": 24, "Status": 24}
+    row_h = 8
+    header_h = 9
 
-    elements = []
-    elements.append(Paragraph(f"Relatorio Financeiro - {nome_mes}", title_style))
-    elements.append(Spacer(1, 6))
+    pdf.set_xy(left_margin, top_margin)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, safe_text(f"Relatorio Financeiro - {nome_mes}"), ln=True, align='C')
+    y = pdf.get_y() + 2
 
-    # Tabela
-    header = ["Data", "Descricao", "Valor", "Tipo", "Status"]
-    data_rows = []
+    def desenha_header(y_pos):
+        pdf.set_xy(left_margin, y_pos)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_draw_color(200, 210, 220)
+        pdf.set_fill_color(230, 236, 245)
+        pdf.set_text_color(20, 30, 40)
+        pdf.cell(col_w["Data"], header_h, "Data", 1, 0, 'C', True)
+        pdf.cell(col_w["Descricao"], header_h, "Descricao", 1, 0, 'C', True)
+        pdf.cell(col_w["Valor"], header_h, "Valor", 1, 0, 'C', True)
+        pdf.cell(col_w["Tipo"], header_h, "Tipo", 1, 0, 'C', True)
+        pdf.cell(col_w["Status"], header_h, "Status", 1, 1, 'C', True)
+        pdf.set_text_color(0, 0, 0)
+
+    def quebra_se_preciso(proxima_altura):
+        nonlocal y
+        if y + proxima_altura + bottom_margin > page_h:
+            pdf.add_page()
+            y = top_margin
+            desenha_header(y)
+            y = y + header_h
+
+    desenha_header(y)
+    y += header_h
+    pdf.set_font("Helvetica", "", 9)
+
     for _, r in df_exp.iterrows():
+        quebra_se_preciso(row_h)
+        pdf.set_xy(left_margin, y)
+        pdf.cell(col_w["Data"], row_h, safe_text(r["data_fmt"]), 1, 0, 'C')
+        desc = safe_text(r["descricao"])
+        pdf.set_font("Helvetica", "", 9)
+        max_w = col_w["Descricao"] - 2
+        while pdf.get_string_width(desc) > max_w and len(desc) > 0:
+            desc = desc[:-1]
+        if pdf.get_string_width(desc) > max_w and len(desc) >= 1:
+            desc = desc[:-1] + "…"
+        pdf.cell(col_w["Descricao"], row_h, desc, 1, 0, 'L')
         valor_txt = f"R$ {r['valor']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        data_rows.append([r['data_fmt'], r['descricao'], valor_txt, r['tipo'], r['status']])
+        pdf.cell(col_w["Valor"], row_h, safe_text(valor_txt), 1, 0, 'R')
+        pdf.cell(col_w["Tipo"], row_h, safe_text(r["tipo"]), 1, 0, 'C')
+        pdf.cell(col_w["Status"], row_h, safe_text(r["status"]), 1, 1, 'C')
+        y += row_h
 
-    table_data = [header] + data_rows
-
-    # Larguras para A4 (somam ~ 186mm -> dentro das margens)
-    col_widths = [25*mm, 90*mm, 28*mm, 23*mm, 20*mm]
-
-    tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
-    tbl.setStyle(TableStyle([
-        ('FONT', (0,0), (-1,0), 'Helvetica-Bold', 10),
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#E6ECF5")),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor("#141A22")),
-        ('ALIGN', (0,0), (-1,0), 'CENTER'),
-
-        ('FONT', (0,1), (-1,-1), 'Helvetica', 9),
-        ('TEXTCOLOR', (0,1), (-1,-1), colors.black),
-
-        ('ALIGN', (2,1), (2,-1), 'RIGHT'),     # Valor
-        ('ALIGN', (0,1), (0,-1), 'CENTER'),    # Data
-        ('ALIGN', (3,1), (4,-1), 'CENTER'),    # Tipo/Status
-
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#C8D2DC")),
-
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#FAFBFD")]),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-    ]))
-
-    elements.append(tbl)
-    doc.build(elements)
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
+    try:
+        return pdf.output(dest="S").encode("latin-1")
+    except Exception:
+        out = pdf.output(dest="S")
+        return out if isinstance(out, (bytes, bytearray)) else str(out).encode("latin-1", "replace")
 
 # ============================
-# SINCRONIZAÇÃO INICIAL
+# SINCRONIZAÇÃO INICIAL (por usuário)
 # ============================
-if 'dados' not in st.session_state:
-    st.session_state.dados = buscar_dados()
-if 'metas' not in st.session_state:
-    st.session_state.metas = buscar_metas()
-if 'fixos' not in st.session_state:
-    st.session_state.fixos = buscar_fixos()
+if 'dados' not in st.session_state: st.session_state.dados = buscar_dados()
+if 'metas' not in st.session_state: st.session_state.metas = buscar_metas()
+if 'fixos' not in st.session_state: st.session_state.fixos = buscar_fixos()
 
 CATEGORIAS = ["🛒 Mercado", "🏠 Moradia", "🚗 Transporte", "🍕 Lazer", "💡 Contas", "💰 Salário", "✨ Outros"]
-meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
 
 # ============================
 # HEADER
@@ -358,26 +473,15 @@ df_geral = st.session_state.dados.copy()
 colunas_padrao = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status']
 df_mes = pd.DataFrame(columns=colunas_padrao)
 df_atrasados_passado = pd.DataFrame(columns=colunas_padrao)
-total_in = 0.0
-total_out_pagas = 0.0
-balanco = 0.0
+total_in = 0.0; total_out_pagas = 0.0; balanco = 0.0
 
 if not df_geral.empty:
     total_in = df_geral[df_geral['tipo'] == 'Entrada']['valor'].sum()
     total_out_pagas = df_geral[(df_geral['tipo'] == 'Saída') & (df_geral['status'] == 'Pago')]['valor'].sum()
     balanco = total_in - total_out_pagas
-
-    df_mes = df_geral[
-        (df_geral['data'].dt.month == mes_num) &
-        (df_geral['data'].dt.year == ano_ref)
-    ]
-
+    df_mes = df_geral[(df_geral['data'].dt.month == mes_num) & (df_geral['data'].dt.year == ano_ref)]
     data_inicio_mes_selecionado = pd.Timestamp(date(ano_ref, mes_num, 1))
-    df_atrasados_passado = df_geral[
-        (df_geral['status'] == 'Pendente') &
-        (df_geral['data'] < data_inicio_mes_selecionado) &
-        (df_geral['tipo'] == 'Saída')
-    ]
+    df_atrasados_passado = df_geral[(df_geral['status'] == 'Pendente') & (df_geral['data'] < data_inicio_mes_selecionado) & (df_geral['tipo'] == 'Saída')]
 
 # ============================
 # ABAS
@@ -385,7 +489,6 @@ if not df_geral.empty:
 aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
 
 with aba_resumo:
-    # Atrasados (passado)
     if not df_atrasados_passado.empty:
         total_atrasado = df_atrasados_passado['valor'].sum()
         with st.expander(f"⚠️ CONTAS PENDENTES DE MESES ANTERIORES: R$ {total_atrasado:,.2f}", expanded=True):
@@ -393,7 +496,9 @@ with aba_resumo:
                 col_at1, col_at2 = st.columns([3, 1])
                 col_at1.write(f"**{row['descricao']}** ({row['data'].strftime('%d/%m/%y')})")
                 if col_at2.button("✔ Pagar", key=f"pay_at_{row['id']}"):
-                    supabase.table("transacoes").update({"status": "Pago"}).eq("id", row['id']).execute()
+                    q = supabase.table("transacoes").update({"status": "Pago"}).eq("id", row['id'])
+                    q = f_eq_user(q, "transacoes")
+                    q.execute()
                     st.session_state.dados = buscar_dados(); st.rerun()
 
     if not df_mes.empty:
@@ -420,21 +525,15 @@ with aba_resumo:
             valor_class = "entrada" if row['tipo'] == "Entrada" else "saida"
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
             s_text = row.get('status', 'Pago')
-
-            if s_text == "Pago":
-                s_class = "pago"
-            elif s_text == "Pendente":
-                s_class = "pendente"
-            else:
-                s_class = "negociacao"
+            if s_text == "Pago": s_class = "pago"
+            elif s_text == "Pendente": s_class = "pendente"
+            else: s_class = "negociacao"
 
             txt_venc = ""
             if s_text == "Pendente" and row['tipo'] == "Saída":
                 dias_diff = (row['data'].date() - hoje).days
-                if dias_diff < 0:
-                    txt_venc = f" <span class='vencimento-alerta'>Atrasada há {-dias_diff} dias</span>"
-                elif dias_diff == 0:
-                    txt_venc = f" <span class='vencimento-alerta' style='color:#D97706'>Vence Hoje!</span>"
+                if dias_diff < 0: txt_venc = f" <span class='vencimento-alerta'>Atrasada há {-dias_diff} dias</span>"
+                elif dias_diff == 0: txt_venc = f" <span class='vencimento-alerta' style='color:#D97706'>Vence Hoje!</span>"
 
             st.markdown(f"""
               <div class="transaction-card">
@@ -453,15 +552,18 @@ with aba_resumo:
             cp, cd = st.columns([1, 1])
             with cp:
                 if s_text != "Pago" and st.button("✔ Pagar", key=f"pay_{row['id']}"):
-                    supabase.table("transacoes").update({"status": "Pago"}).eq("id", row['id']).execute()
+                    q = supabase.table("transacoes").update({"status": "Pago"}).eq("id", row['id'])
+                    q = f_eq_user(q, "transacoes")
+                    q.execute()
                     st.session_state.dados = buscar_dados(); st.rerun()
             with cd:
                 st.markdown('<div class="btn-excluir">', unsafe_allow_html=True)
                 if st.button("Excluir", key=f"del_{row['id']}"):
-                    supabase.table("transacoes").delete().eq("id", row['id']).execute()
+                    q = supabase.table("transacoes").delete().eq("id", row['id'])
+                    q = f_eq_user(q, "transacoes")
+                    q.execute()
                     st.session_state.dados = buscar_dados(); st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
-
             st.markdown("<br>", unsafe_allow_html=True)
     else:
         st.info("Toque em 'Novo' para começar!")
@@ -479,14 +581,15 @@ with aba_novo:
             fixo_check = st.checkbox("Salvar na lista de Fixos")
             if st.form_submit_button("Salvar"):
                 if v > 0:
-                    supabase.table("transacoes").insert({
-                        "data": str(dt), "descricao": d, "valor": v,
-                        "tipo": t, "categoria": c, "status": stat
-                    }).execute()
+                    payload = {"data": str(dt), "descricao": d, "valor": v, "tipo": t, "categoria": c, "status": stat}
+                    if user_id and SUPPORTS_USER_ID.get("transacoes", False):
+                        payload["user_id"] = user_id
+                    supabase.table("transacoes").insert(payload).execute()
                     if fixo_check:
-                        supabase.table("fixos").insert({
-                            "descricao": d, "valor": v, "categoria": c
-                        }).execute()
+                        fx = {"descricao": d, "valor": v, "categoria": c}
+                        if user_id and SUPPORTS_USER_ID.get("fixos", False):
+                            fx["user_id"] = user_id
+                        supabase.table("fixos").insert(fx).execute()
                     st.success("Cadastrado!")
                     st.session_state.dados = buscar_dados()
                     st.session_state.fixos = buscar_fixos()
@@ -500,10 +603,10 @@ with aba_novo:
                 with st.expander(f"📌 {row['descricao']} - R$ {row['valor']:,.2f}"):
                     if st.button("Lançar neste mês", key=f"launch_{row['id']}"):
                         d_f = str(date(ano_ref, mes_num, 1))
-                        supabase.table("transacoes").insert({
-                            "data": d_f, "descricao": row['descricao'], "valor": row['valor'],
-                            "tipo": "Saída", "categoria": row['categoria'], "status": "Pago"
-                        }).execute()
+                        payload = {"data": d_f, "descricao": row['descricao'], "valor": row['valor'], "tipo": "Saída", "categoria": row['categoria'], "status": "Pago"}
+                        if user_id and SUPPORTS_USER_ID.get("transacoes", False):
+                            payload["user_id"] = user_id
+                        supabase.table("transacoes").insert(payload).execute()
                         st.session_state.dados = buscar_dados()
                         st.toast("Lançado!")
                         st.rerun()
@@ -525,18 +628,18 @@ with aba_metas:
     for cat in CATEGORIAS:
         if cat != "💰 Salário":
             atual_m = float(st.session_state.metas.get(cat, 0))
-            nova_meta = st.number_input(f"Meta {cat}", min_value=0.0, value=atual_m)
-            if nova_meta != atual_m and st.button(f"Atualizar {cat}"):
-                supabase.table("metas").upsert({"categoria": cat, "limite": nova_meta}).execute()
+            nova_meta = st.number_input(f"Meta {cat}", min_value=0.0, value=atual_m, key=f"meta_{cat}")
+            if st.button(f"Atualizar {cat}", key=f"btn_meta_{cat}"):
+                payload = {"categoria": cat, "limite": nova_meta}
+                if user_id and SUPPORTS_USER_ID.get("metas", False):
+                    payload["user_id"] = user_id
+                supabase.table("metas").upsert(payload).execute()
                 st.session_state.metas = buscar_metas(); st.rerun()
 
 with aba_reserva:
-    st.markdown(
-        f'<div class="reserva-card"><p style="margin:0;opacity:0.9;font-size:14px;">PATRIMÔNIO REAL</p><h2 style="margin:.4rem 0 0 0;">R$ {balanco:,.2f}</h2></div>',
-        unsafe_allow_html=True
-    )
+    st.markdown(f'<div class="reserva-card"><p style="margin:0;opacity:0.9;font-size:14px;">PATRIMÔNIO REAL</p><h2 style="margin:.4rem 0 0 0;">R$ {balanco:,.2f}</h2></div>', unsafe_allow_html=True)
 
-    # Resumo de Dívidas em Negociação
+    # Resumo de dívidas em negociação
     if not df_geral.empty:
         total_negoc = df_geral[df_geral['status'] == "Em Negociação"]['valor'].sum()
         if total_negoc > 0:
@@ -544,18 +647,13 @@ with aba_reserva:
 
     st.markdown("### 📄 Relatórios")
 
-    # >>> Recalcula o DF no momento do download (evita staleness)
+    # Recalcula DF no momento do download (evita staleness)
     if not st.session_state.dados.empty:
         df_para_relatorio = st.session_state.dados.copy()
         df_para_relatorio['data'] = pd.to_datetime(df_para_relatorio['data'], errors='coerce')
-        mask = (
-            (df_para_relatorio['data'].dt.month == mes_num) &
-            (df_para_relatorio['data'].dt.year == ano_ref)
-        )
-        df_para_relatorio = df_para_relatorio[mask].copy()
-        df_para_relatorio = df_para_relatorio.sort_values(by=['data', 'descricao'], na_position='last')
+        mask = (df_para_relatorio['data'].dt.month == mes_num) & (df_para_relatorio['data'].dt.year == ano_ref)
+        df_para_relatorio = df_para_relatorio[mask].copy().sort_values(by=['data','descricao'], na_position='last')
 
-        # Debug: quantas linhas vão?
         st.caption(f"🧾 Lançamentos no relatório: **{len(df_para_relatorio)}**")
 
         if not df_para_relatorio.empty:
@@ -594,5 +692,5 @@ with aba_sonhos:
                 st.progress(min(max(balanco/v_sonho, 0.0), 1.0))
             else:
                 st.warning("Economize este mês para alimentar seu sonho!")
-        except Exception:
+        except:
             st.info("Projeção indisponível no momento.")
