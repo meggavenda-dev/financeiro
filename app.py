@@ -55,7 +55,7 @@ def inject_head_for_ios():
         // Evita auto link de telefones (iOS antigo)
         add('meta', { name: 'format-detection', content: 'telephone=no' });
 
-        // Ícones (substitua as URLs por ícone próprio 180x180 e variações)
+        // Ícones (substitua por arquivos próprios se desejar)
         const icon180 = 'https://raw.githubusercontent.com/twitter/twemoji/master/assets/72x72/1f3e1.png';
         const icon152 = icon180;
         const icon120 = icon180;
@@ -232,6 +232,13 @@ input, select, textarea,
   box-shadow: 0 1px 8px rgba(0,0,0,.06); border:1px solid var(--line);
 }
 
+/* Metas */
+.meta-container{
+  background:#F6F9FC; border:1px solid var(--line);
+  border-radius:10px; padding:10px; margin-bottom:8px;
+  color:#0A1628; font-weight:600;
+}
+
 /* Expanders */
 [data-testid="stExpander"] > details{
   border:1px solid var(--line); border-radius:14px; padding:6px 10px; background: var(--card);
@@ -291,9 +298,11 @@ def buscar_dados():
     colunas = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status']
     if df.empty:
         return pd.DataFrame(columns=colunas)
-    df['data'] = pd.to_datetime(df['data'])
+    # Normaliza tipos
+    df['data'] = pd.to_datetime(df['data'], errors='coerce')
     if 'status' not in df.columns:
         df['status'] = 'Pago'
+    df['status'] = df['status'].fillna('Pago')
     return df
 
 def buscar_metas():
@@ -314,34 +323,134 @@ def gerar_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_exp = df.copy()
-        df_exp['data'] = df_exp['data'].dt.strftime('%d/%m/%Y')
+        if not df_exp.empty and pd.api.types.is_datetime64_any_dtype(df_exp['data']):
+            df_exp['data'] = df_exp['data'].dt.strftime('%d/%m/%Y')
+        else:
+            df_exp['data'] = pd.to_datetime(df_exp['data'], errors='coerce').dt.strftime('%d/%m/%Y')
         df_exp.to_excel(writer, index=False, sheet_name='Lançamentos')
     return output.getvalue()
 
 def gerar_pdf(df, nome_mes):
-    pdf = FPDF()
+    """
+    Gera um PDF tabular com quebra de página, repetição de cabeçalho
+    e colunas dimensionadas para A4 retrato.
+    """
+    if df is None or df.empty:
+        # PDF mínimo informativo
+        pdf = FPDF(orientation='P', unit='mm', format='A4')
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 10, f"Relatorio Financeiro - {nome_mes}", ln=True, align='C')
+        pdf.ln(10)
+        pdf.set_font("Helvetica", "", 12)
+        pdf.cell(0, 8, "Sem lancamentos no periodo.", ln=True)
+        try:
+            return bytes(pdf.output())
+        except Exception:
+            return pdf.output(dest="S").encode("latin-1", "replace")
+
+    # Sanitiza/garante tipos
+    df_exp = df.copy()
+    if not pd.api.types.is_datetime64_any_dtype(df_exp['data']):
+        df_exp['data'] = pd.to_datetime(df_exp['data'], errors='coerce')
+    df_exp['data_fmt'] = df_exp['data'].dt.strftime('%d/%m/%Y').fillna('')
+    df_exp['descricao'] = df_exp['descricao'].fillna('').astype(str)
+    df_exp['valor'] = pd.to_numeric(df_exp['valor'], errors='coerce').fillna(0.0)
+    if 'status' not in df_exp.columns:
+        df_exp['status'] = 'Pago'
+    df_exp['status'] = df_exp['status'].fillna('Pago').astype(str)
+    df_exp['tipo'] = df_exp['tipo'].fillna('').astype(str)
+
+    # Configuração do PDF
+    pdf = FPDF(orientation='P', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=True, margin=15)  # margem para rodapé
     pdf.add_page()
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(200, 10, f"Relatorio Financeiro - {nome_mes}", ln=True, align='C')
-    pdf.ln(10)
-    pdf.set_font("Helvetica", "B", 10)
-    cols = ["Data", "Descricao", "Valor", "Tipo", "Status"]
-    for col in cols:
-        pdf.cell(38, 10, col, 1)
-    pdf.ln()
+
+    # Margens e larguras
+    left_margin = 10
+    right_margin = 10
+    page_w = 210
+    usable_w = page_w - left_margin - right_margin
+
+    # Layout de colunas (soma deve ser == usable_w)
+    # Data | Descricao | Valor | Tipo | Status
+    col_w = {
+        "Data": 22,
+        "Descricao": 92,
+        "Valor": 28,
+        "Tipo": 24,
+        "Status": 24,
+    }
+    total_w = sum(col_w.values())
+    if abs(total_w - usable_w) > 0.5:
+        escala = usable_w / total_w
+        for k in col_w:
+            col_w[k] = round(col_w[k] * escala, 2)
+
+    row_h = 8  # altura base de linha
+    header_h = 9
+
+    def draw_title():
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 10, f"Relatorio Financeiro - {nome_mes}", ln=True, align='C')
+        pdf.ln(2)
+
+    def draw_header():
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_fill_color(230, 236, 245)   # fundo levemente cinza
+        pdf.set_draw_color(200, 210, 220)   # borda suave
+        pdf.set_text_color(20, 30, 40)
+        pdf.cell(col_w["Data"],     header_h, "Data",      border=1, ln=0, align='C', fill=True)
+        pdf.cell(col_w["Descricao"], header_h, "Descricao", border=1, ln=0, align='C', fill=True)
+        pdf.cell(col_w["Valor"],    header_h, "Valor",     border=1, ln=0, align='C', fill=True)
+        pdf.cell(col_w["Tipo"],     header_h, "Tipo",      border=1, ln=0, align='C', fill=True)
+        pdf.cell(col_w["Status"],   header_h, "Status",    border=1, ln=1, align='C', fill=True)
+        pdf.set_text_color(0, 0, 0)
+
+    def ensure_space(next_block_height):
+        """Garante espaço; se não houver, abre nova página e redesenha header."""
+        if pdf.get_y() + next_block_height + 15 > pdf.h:  # 15 = auto_page_break margin
+            pdf.add_page()
+            draw_header()
+
+    # Título + Cabeçalho inicial
+    draw_title()
+    draw_header()
     pdf.set_font("Helvetica", "", 9)
-    for _, row in df.iterrows():
-        pdf.cell(38, 10, row['data'].strftime('%d/%m/%y'), 1)
-        pdf.cell(38, 10, str(row['descricao'])[:18], 1)
-        pdf.cell(38, 10, f"R$ {row['valor']:.2f}", 1)
-        pdf.cell(38, 10, row['tipo'], 1)
-        pdf.cell(38, 10, row['status'], 1)
-        pdf.ln()
-    # Compatibilidade de retorno do FPDF
+
+    # Renderiza linhas
+    for _, row in df_exp.iterrows():
+        ensure_space(row_h)
+
+        # Data
+        pdf.cell(col_w["Data"], row_h, row["data_fmt"], border=1, ln=0, align='C')
+
+        # Descrição (truncada em 1 linha com “…”)
+        desc = str(row["descricao"])
+        max_w = col_w["Descricao"] - 2  # padding interno
+        pdf.set_font("Helvetica", "", 9)
+        while pdf.get_string_width(desc) > max_w and len(desc) > 0:
+            desc = desc[:-1]
+        if desc != str(row["descricao"]):
+            if len(desc) >= 1:
+                desc = desc[:-1] + "…"
+        pdf.cell(col_w["Descricao"], row_h, desc, border=1, ln=0, align='L')
+
+        # Valor (alinhado à direita pt-BR)
+        valor_txt = f"R$ {row['valor']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        pdf.cell(col_w["Valor"], row_h, valor_txt, border=1, ln=0, align='R')
+
+        # Tipo
+        pdf.cell(col_w["Tipo"], row_h, row["tipo"], border=1, ln=0, align='C')
+
+        # Status
+        pdf.cell(col_w["Status"], row_h, row["status"], border=1, ln=1, align='C')
+
+    # Retorno em bytes (compatível com FPDF em diferentes versões)
     try:
         return bytes(pdf.output())
-    except:
-        return pdf.output(dest="S").encode("latin-1")
+    except Exception:
+        return pdf.output(dest="S").encode("latin-1", "replace")
 
 # ============================
 # SINCRONIZAÇÃO INICIAL
@@ -603,5 +712,5 @@ with aba_sonhos:
                 st.progress(min(max(balanco/v_sonho, 0.0), 1.0))
             else:
                 st.warning("Economize este mês para alimentar seu sonho!")
-        except:
+        except Exception:
             st.info("Projeção indisponível no momento.")
