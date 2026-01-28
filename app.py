@@ -7,7 +7,7 @@ import io
 import streamlit.components.v1 as components
 import bcrypt
 
-# === NOVO: ReportLab para gerar PDF robusto (cabeçalho + paginação) ===
+# === ReportLab para gerar PDF robusto (cabeçalho + paginação) ===
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
@@ -15,66 +15,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 
 # ============================
-# CONFIGURAÇÃO SUPABASE
+# CONFIGURAÇÃO DA PÁGINA (MOBILE) - deve ser a 1ª chamada do Streamlit
 # ============================
-try:
-    url: str = st.secrets["SUPABASE_URL"]
-    key: str = st.secrets["SUPABASE_KEY"]
-    supabase: Client = create_client(url, key)
-except Exception as e:
-    st.error("Erro ao conectar ao banco de dados. Verifique os Secrets.")
-    st.stop()
-
-# ============================
-# SISTEMA DE LOGIN
-# ============================
-
-def login():
-    st.markdown('<div class="header-container"><div class="main-title">🔐 Acesso Restrito</div></div>', unsafe_allow_html=True)
-        
-    with st.container():
-        user_input = st.text_input("Usuário")
-        pass_input = st.text_input("Senha", type="password")
-              
-        if st.button("Entrar"):
-            # Este bloco abaixo PRECISA estar recuado (4 espaços)
-            user_clean = user_input.strip()
-            pass_clean = pass_input.strip()
-
-            res = supabase.table("usuarios").select("nome, password_hash").eq("nome", user_clean).execute()
-            
-            if res.data:
-                stored_hash = str(res.data[0]['password_hash']).strip()
-                
-                try:
-                    # O bloco try também precisa de recuo interno
-                    if bcrypt.checkpw(pass_clean.encode('utf-8'), stored_hash.encode('utf-8')):
-                        st.session_state.logged_in = True
-                        st.session_state.user_name = res.data[0]['nome']
-                        st.rerun()
-                    else:
-                        st.error("Senha incorreta.")
-                except Exception as e:
-                    st.error("Erro no formato do hash no banco.")
-            else:
-                st.error("Usuário não encontrado.")
-
-# Controle de sessão
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-
-if not st.session_state.logged_in:
-    login()
-    st.stop()
-
-# Se chegou aqui, o usuário está logado. Botão de Logout opcional:
-if st.sidebar.button("Sair"):
-    st.session_state.logged_in = False
-    st.rerun()
-
-# ================================
-# CONFIGURAÇÃO DA PÁGINA (MOBILE)
-# ================================
 st.set_page_config(
     page_title="Minha Casa",
     page_icon="🏡",
@@ -121,7 +63,6 @@ inject_head_for_ios()
 
 # =========================================================
 # CSS MID-CONTRAST (claro por padrão) + Dark Mode moderado
-# Corrige: pouca legibilidade no claro + overlap do ícone
 # =========================================================
 st.markdown("""
 <style>
@@ -260,19 +201,90 @@ except Exception as e:
     st.stop()
 
 # ============================
+# SISTEMA DE LOGIN
+# ============================
+def login():
+    st.markdown('<div class="header-container"><div class="main-title">🔐 Acesso Restrito</div></div>', unsafe_allow_html=True)
+    with st.container():
+        user_input = st.text_input("Usuário")
+        pass_input = st.text_input("Senha", type="password")
+        if st.button("Entrar"):
+            user_clean = user_input.strip()
+            pass_clean = pass_input.strip()
+            try:
+                res = supabase.table("usuarios").select("nome, password_hash").eq("nome", user_clean).execute()
+            except Exception:
+                st.error("Erro ao consultar usuários.")
+                return
+            if res.data:
+                stored_hash = str(res.data[0]['password_hash']).strip()
+                try:
+                    if bcrypt.checkpw(pass_clean.encode('utf-8'), stored_hash.encode('utf-8')):
+                        st.session_state.logged_in = True
+                        st.session_state.user_name = res.data[0]['nome']
+                        st.rerun()
+                    else:
+                        st.error("Senha incorreta.")
+                except Exception:
+                    st.error("Erro no formato do hash no banco.")
+            else:
+                st.error("Usuário não encontrado.")
+
+# Controle de sessão
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    login()
+    st.stop()
+
+# Botão de Logout (opcional)
+if st.sidebar.button("Sair"):
+    st.session_state.logged_in = False
+    st.rerun()
+
+# ============================
 # FUNÇÕES DE BANCO DE DADOS
 # ============================
+def buscar_pessoas():
+    """
+    Retorna lista de nomes de pessoas ativas (ordenadas), vindo da view vw_pessoas_ativas.
+    Mantém 'Ambos' ao final. Fallback seguro para ['Guilherme','Alynne','Ambos'].
+    """
+    try:
+        # Views são expostas pelo PostgREST como se fossem tabelas
+        res = supabase.table("vw_pessoas_ativas").select("*").execute()
+        if res.data:
+            nomes = [r.get('nome') for r in res.data if r.get('nome')]
+            nomes = [n for n in nomes if str(n).strip().lower() != 'ambos']
+            return nomes + ['Ambos']
+    except Exception:
+        pass
+    return ['Guilherme', 'Alynne', 'Ambos']
+
+def idx_pessoa(valor: str, pessoas: list[str]) -> int:
+    try:
+        return pessoas.index(valor)
+    except Exception:
+        return pessoas.index('Ambos') if 'Ambos' in pessoas else 0
+
 def buscar_dados():
     res = supabase.table("transacoes").select("*").execute()
     df = pd.DataFrame(res.data)
-    colunas = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status']
+    colunas = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status', 'responsavel']
     if df.empty:
         return pd.DataFrame(columns=colunas)
     df['data'] = pd.to_datetime(df['data'], errors='coerce')
     if 'status' not in df.columns:
         df['status'] = 'Pago'
-    df['status'] = df['status'].fillna('Pago')
-    return df
+    df['status'] = df['status'].fillna('Pago').astype(str)
+    if 'responsavel' not in df.columns:
+        df['responsavel'] = 'Ambos'
+    df['responsavel'] = df['responsavel'].fillna('Ambos').astype(str)
+    for c in colunas:
+        if c not in df.columns:
+            df[c] = None
+    return df[colunas]
 
 def buscar_metas():
     res = supabase.table("metas").select("*").execute()
@@ -282,7 +294,10 @@ def buscar_fixos():
     res = supabase.table("fixos").select("*").execute()
     df = pd.DataFrame(res.data)
     if df.empty:
-        return pd.DataFrame(columns=['id', 'descricao', 'valor', 'categoria'])
+        return pd.DataFrame(columns=['id', 'descricao', 'valor', 'categoria', 'responsavel'])
+    if 'responsavel' not in df.columns:
+        df['responsavel'] = 'Ambos'
+    df['responsavel'] = df['responsavel'].fillna('Ambos').astype(str)
     return df
 
 # ============================
@@ -293,13 +308,19 @@ def gerar_excel(df):
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_exp = df.copy()
         df_exp['data'] = pd.to_datetime(df_exp['data'], errors='coerce').dt.strftime('%d/%m/%Y')
+        # Inclui Responsável
+        colunas = ['data', 'descricao', 'valor', 'tipo', 'status', 'responsavel', 'categoria', 'id']
+        for c in colunas:
+            if c not in df_exp.columns:
+                df_exp[c] = ''
+        df_exp = df_exp[colunas]
         df_exp.to_excel(writer, index=False, sheet_name='Lançamentos')
     return output.getvalue()
 
 def gerar_pdf(df, nome_mes):
     """
     Gera PDF com ReportLab (tabela com cabeçalho repetido e paginação automática).
-    Nenhuma linha é descartada.
+    Inclui coluna 'Responsável'.
     """
     buffer = io.BytesIO()
 
@@ -309,11 +330,15 @@ def gerar_pdf(df, nome_mes):
     df_exp['data_fmt'] = df_exp['data'].dt.strftime('%d/%m/%Y').fillna('')
     df_exp['descricao'] = df_exp['descricao'].fillna('').astype(str)
     df_exp['valor'] = pd.to_numeric(df_exp['valor'], errors='coerce').fillna(0.0)
-    df_exp['tipo'] = df_exp.get('tipo', '').fillna('').astype(str)
-    df_exp['status'] = df_exp.get('status', 'Pago')
+    df_exp['tipo'] = (df_exp['tipo'] if 'tipo' in df_exp.columns else '').fillna('').astype(str)
+    df_exp['status'] = (df_exp['status'] if 'status' in df_exp.columns else 'Pago')
     if not isinstance(df_exp['status'], pd.Series):
         df_exp['status'] = 'Pago'
     df_exp['status'] = df_exp['status'].fillna('Pago').astype(str)
+    df_exp['responsavel'] = (df_exp['responsavel'] if 'responsavel' in df_exp.columns else 'Ambos')
+    if not isinstance(df_exp['responsavel'], pd.Series):
+        df_exp['responsavel'] = 'Ambos'
+    df_exp['responsavel'] = df_exp['responsavel'].fillna('Ambos').astype(str)
 
     # Ordena como no histórico
     df_exp = df_exp.sort_values(by=['data', 'descricao'], na_position='last')
@@ -335,23 +360,22 @@ def gerar_pdf(df, nome_mes):
         leading=20,
         spaceAfter=6
     )
-    normal_style = styles['Normal']
 
     elements = []
     elements.append(Paragraph(f"Relatorio Financeiro - {nome_mes}", title_style))
     elements.append(Spacer(1, 6))
 
     # Tabela
-    header = ["Data", "Descricao", "Valor", "Tipo", "Status"]
+    header = ["Data", "Descricao", "Valor", "Tipo", "Status", "Responsável"]
     data_rows = []
     for _, r in df_exp.iterrows():
         valor_txt = f"R$ {r['valor']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        data_rows.append([r['data_fmt'], r['descricao'], valor_txt, r['tipo'], r['status']])
+        data_rows.append([r['data_fmt'], r['descricao'], valor_txt, r['tipo'], r['status'], r['responsavel']])
 
     table_data = [header] + data_rows
 
-    # Larguras para A4 (somam ~ 186mm -> dentro das margens)
-    col_widths = [25*mm, 90*mm, 28*mm, 23*mm, 20*mm]
+    # Larguras em A4 (somam algo próximo de 186mm útil dentro das margens)
+    col_widths = [22*mm, 70*mm, 25*mm, 22*mm, 22*mm, 25*mm]
 
     tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
     tbl.setStyle(TableStyle([
@@ -365,7 +389,7 @@ def gerar_pdf(df, nome_mes):
 
         ('ALIGN', (2,1), (2,-1), 'RIGHT'),     # Valor
         ('ALIGN', (0,1), (0,-1), 'CENTER'),    # Data
-        ('ALIGN', (3,1), (4,-1), 'CENTER'),    # Tipo/Status
+        ('ALIGN', (3,1), (5,-1), 'CENTER'),    # Tipo/Status/Responsável
 
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#C8D2DC")),
 
@@ -388,9 +412,12 @@ if 'metas' not in st.session_state:
     st.session_state.metas = buscar_metas()
 if 'fixos' not in st.session_state:
     st.session_state.fixos = buscar_fixos()
+if 'pessoas' not in st.session_state or not st.session_state.pessoas:
+    st.session_state.pessoas = buscar_pessoas()
 
 CATEGORIAS = ["🛒 Mercado", "🏠 Moradia", "🚗 Transporte", "🍕 Lazer", "💡 Contas", "💰 Salário", "✨ Outros"]
 meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+PESSOAS = st.session_state.pessoas  # ['Guilherme', 'Alynne', 'Ambos'] (dinâmico)
 
 # ============================
 # HEADER
@@ -415,7 +442,7 @@ mes_num = meses.index(mes_nome) + 1
 # PROCESSAMENTO DE DADOS
 # ============================
 df_geral = st.session_state.dados.copy()
-colunas_padrao = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status']
+colunas_padrao = ['id', 'data', 'descricao', 'valor', 'tipo', 'categoria', 'status', 'responsavel']
 df_mes = pd.DataFrame(columns=colunas_padrao)
 df_atrasados_passado = pd.DataFrame(columns=colunas_padrao)
 total_in = 0.0
@@ -442,8 +469,13 @@ if not df_geral.empty:
 # ============================
 # ABAS
 # ============================
-aba_resumo, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(["📊 Mês", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"])
+aba_resumo, aba_negociacao, aba_novo, aba_metas, aba_reserva, aba_sonhos = st.tabs(
+    ["📊 Mês", "🤝 Negociação", "➕ Novo", "🎯 Metas", "🏦 Caixa", "🚀 Sonhos"]
+)
 
+# ============================
+# ABA: MÊS (RESUMO + HISTÓRICO)
+# ============================
 with aba_resumo:
     # Atrasados (passado)
     if not df_atrasados_passado.empty:
@@ -451,7 +483,8 @@ with aba_resumo:
         with st.expander(f"⚠️ CONTAS PENDENTES DE MESES ANTERIORES: R$ {total_atrasado:,.2f}", expanded=True):
             for _, row in df_atrasados_passado.iterrows():
                 col_at1, col_at2 = st.columns([3, 1])
-                col_at1.write(f"**{row['descricao']}** ({row['data'].strftime('%d/%m/%y')})")
+                dt_txt = row['data'].strftime('%d/%m/%y') if pd.notnull(row['data']) else '--/--/--'
+                col_at1.write(f"**{row['descricao']}** ({dt_txt}) — **Resp.: {row.get('responsavel','Ambos')}**")
                 if col_at2.button("✔ Pagar", key=f"pay_at_{row['id']}"):
                     supabase.table("transacoes").update({"status": "Pago"}).eq("id", row['id']).execute()
                     st.session_state.dados = buscar_dados(); st.rerun()
@@ -489,20 +522,24 @@ with aba_resumo:
                 s_class = "negociacao"
 
             txt_venc = ""
-            if s_text == "Pendente" and row['tipo'] == "Saída":
+            if s_text == "Pendente" and row['tipo'] == "Saída" and pd.notnull(row['data']):
                 dias_diff = (row['data'].date() - hoje).days
                 if dias_diff < 0:
                     txt_venc = f" <span class='vencimento-alerta'>Atrasada há {-dias_diff} dias</span>"
                 elif dias_diff == 0:
                     txt_venc = f" <span class='vencimento-alerta' style='color:#D97706'>Vence Hoje!</span>"
 
+            resp_txt = row.get('responsavel', 'Ambos')
+
+            dt_card = row['data'].strftime('%d %b') if pd.notnull(row['data']) else '-- ---'
             st.markdown(f"""
               <div class="transaction-card">
                 <div class="transaction-left">
                   <div class="card-icon">{icon}</div>
                   <div class="tc-info">
                     <div class="tc-title">{row["descricao"]}</div>
-                    <div class="tc-meta">{row["data"].strftime('%d %b')}{txt_venc}</div>
+                    <div class="tc-meta">{dt_card}{txt_venc}</div>
+                    <div class="tc-meta">Responsável: <b>{resp_txt}</b></div>
                     <div class="status-badge {s_class}">{s_text}</div>
                   </div>
                 </div>
@@ -526,6 +563,91 @@ with aba_resumo:
     else:
         st.info("Toque em 'Novo' para começar!")
 
+# ============================
+# ABA: NEGOCIAÇÃO (separada)
+# ============================
+with aba_negociacao:
+    st.markdown("### 🤝 Contas em Negociação")
+
+    if st.session_state.dados.empty:
+        st.info("Não há dados.")
+    else:
+        df_neg = st.session_state.dados.copy()
+        df_neg = df_neg[df_neg['status'] == "Em Negociação"]
+
+        col_f1, col_f2 = st.columns([2,1])
+        resp_filtro = col_f1.selectbox("Responsável", ["Todos"] + PESSOAS, index=0)
+        somente_mes = col_f2.checkbox("Mostrar apenas do mês selecionado", value=False)
+
+        if resp_filtro != "Todos":
+            df_neg = df_neg[df_neg['responsavel'] == resp_filtro]
+
+        if somente_mes:
+            df_neg = df_neg[
+                (df_neg['data'].dt.month == mes_num) &
+                (df_neg['data'].dt.year == ano_ref)
+            ]
+
+        if df_neg.empty:
+            st.caption("Sem itens em negociação com os filtros atuais.")
+        else:
+            total_neg = float(df_neg['valor'].sum())
+            qtd_neg = int(len(df_neg))
+            por_pessoa = df_neg.groupby('responsavel')['valor'].sum().sort_values(ascending=False)
+
+            m1, m2 = st.columns(2)
+            m1.metric("Total em Negociação", f"R$ {total_neg:,.2f}")
+            m2.metric("Quantidade de Itens", str(qtd_neg))
+
+            with st.expander("Ver totais por responsável", expanded=True):
+                for pessoa, soma in por_pessoa.items():
+                    st.write(f"**{pessoa}** — R$ {soma:,.2f}")
+
+            st.markdown("#### Itens")
+            for _, row in df_neg.sort_values(by='data', ascending=False).iterrows():
+                icon = row['categoria'].split()[0] if " " in row['categoria'] else "💬"
+                dt_txt = row['data'].strftime('%d/%m/%Y') if pd.notnull(row['data']) else '--/--/----'
+                st.markdown(f"""
+                <div class="transaction-card">
+                  <div class="transaction-left">
+                    <div class="card-icon">{icon}</div>
+                    <div class="tc-info">
+                      <div class="tc-title">{row['descricao']}</div>
+                      <div class="tc-meta">{dt_txt} • <b>{row['categoria']}</b></div>
+                      <div class="status-badge negociacao">Em Negociação</div>
+                      <div class="tc-meta">Responsável: <b>{row.get('responsavel','Ambos')}</b></div>
+                    </div>
+                  </div>
+                  <div class="transaction-right saida">R$ {row['valor']:,.2f}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                cA, cB, cC, cD = st.columns([1,1,2,1])
+                with cA:
+                    if st.button("Marcar Pendente", key=f"neg_to_pen_{row['id']}"):
+                        supabase.table("transacoes").update({"status": "Pendente"}).eq("id", row['id']).execute()
+                        st.session_state.dados = buscar_dados(); st.rerun()
+                with cB:
+                    if st.button("Marcar Pago", key=f"neg_to_pago_{row['id']}"):
+                        supabase.table("transacoes").update({"status": "Pago"}).eq("id", row['id']).execute()
+                        st.session_state.dados = buscar_dados(); st.rerun()
+                with cC:
+                    novo_resp = st.selectbox(
+                        "Responsável",
+                        PESSOAS,
+                        index=idx_pessoa(row.get('responsavel', 'Ambos'), PESSOAS),
+                        key=f"resp_{row['id']}"
+                    )
+                with cD:
+                    if st.button("Salvar Resp.", key=f"save_resp_{row['id']}"):
+                        supabase.table("transacoes").update({"responsavel": novo_resp}).eq("id", row['id']).execute()
+                        st.session_state.dados = buscar_dados(); st.rerun()
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+# ============================
+# ABA: NOVO (Lançamento + Fixos)
+# ============================
 with aba_novo:
     aba_unit, aba_fixo = st.tabs(["Lançamento Único", "🗓️ Gerenciar Fixos"])
     with aba_unit:
@@ -535,21 +657,26 @@ with aba_novo:
             t = st.radio("Tipo", ["Saída", "Entrada"], horizontal=True)
             stat = st.selectbox("Status", ["Pago", "Pendente", "Em Negociação"])
             c = st.selectbox("Categoria", CATEGORIAS)
+            resp = st.selectbox("Responsável", PESSOAS, index=idx_pessoa("Ambos", PESSOAS))
             dt = st.date_input("Data/Vencimento", date.today())
             fixo_check = st.checkbox("Salvar na lista de Fixos")
             if st.form_submit_button("Salvar"):
                 if v > 0:
                     supabase.table("transacoes").insert({
                         "data": str(dt), "descricao": d, "valor": v,
-                        "tipo": t, "categoria": c, "status": stat
+                        "tipo": t, "categoria": c, "status": stat,
+                        "responsavel": resp
                     }).execute()
                     if fixo_check:
                         supabase.table("fixos").insert({
-                            "descricao": d, "valor": v, "categoria": c
+                            "descricao": d, "valor": v, "categoria": c,
+                            "responsavel": resp
                         }).execute()
                     st.success("Cadastrado!")
                     st.session_state.dados = buscar_dados()
                     st.session_state.fixos = buscar_fixos()
+                    # Atualiza pessoas (caso tenha sido editado fora)
+                    st.session_state.pessoas = buscar_pessoas()
                     st.rerun()
                 else:
                     st.error("O valor deve ser maior que zero.")
@@ -562,7 +689,8 @@ with aba_novo:
                         d_f = str(date(ano_ref, mes_num, 1))
                         supabase.table("transacoes").insert({
                             "data": d_f, "descricao": row['descricao'], "valor": row['valor'],
-                            "tipo": "Saída", "categoria": row['categoria'], "status": "Pago"
+                            "tipo": "Saída", "categoria": row['categoria'], "status": "Pago",
+                            "responsavel": row.get('responsavel', 'Ambos')
                         }).execute()
                         st.session_state.dados = buscar_dados()
                         st.toast("Lançado!")
@@ -570,9 +698,10 @@ with aba_novo:
                     st.divider()
                     new_desc = st.text_input("Editar Descrição", value=row['descricao'], key=f"ed_d_{row['id']}")
                     new_val = st.number_input("Editar Valor", value=float(row['valor']), key=f"ed_v_{row['id']}")
+                    new_resp = st.selectbox("Responsável", PESSOAS, index=idx_pessoa(row.get('responsavel', 'Ambos'), PESSOAS), key=f"ed_r_{row['id']}")
                     col_ed1, col_ed2 = st.columns(2)
                     if col_ed1.button("Salvar Alterações", key=f"save_fix_{row['id']}"):
-                        supabase.table("fixos").update({"descricao": new_desc, "valor": new_val}).eq("id", row['id']).execute()
+                        supabase.table("fixos").update({"descricao": new_desc, "valor": new_val, "responsavel": new_resp}).eq("id", row['id']).execute()
                         st.session_state.fixos = buscar_fixos(); st.rerun()
                     if col_ed2.button("❌ Remover Fixo", key=f"del_fix_{row['id']}"):
                         supabase.table("fixos").delete().eq("id", row['id']).execute()
@@ -580,16 +709,22 @@ with aba_novo:
         else:
             st.caption("Sem fixos configurados.")
 
+# ============================
+# ABA: METAS
+# ============================
 with aba_metas:
     st.info("💡 Exemplo: Defina R$ 1.000,00 para '🛒 Mercado' para controlar seus gastos essenciais.")
     for cat in CATEGORIAS:
         if cat != "💰 Salário":
             atual_m = float(st.session_state.metas.get(cat, 0))
-            nova_meta = st.number_input(f"Meta {cat}", min_value=0.0, value=atual_m)
-            if nova_meta != atual_m and st.button(f"Atualizar {cat}"):
+            nova_meta = st.number_input(f"Meta {cat}", min_value=0.0, value=atual_m, key=f"meta_{cat}")
+            if st.button(f"Atualizar {cat}", key=f"btn_meta_{cat}"):
                 supabase.table("metas").upsert({"categoria": cat, "limite": nova_meta}).execute()
                 st.session_state.metas = buscar_metas(); st.rerun()
 
+# ============================
+# ABA: CAIXA / RELATÓRIOS
+# ============================
 with aba_reserva:
     st.markdown(
         f'<div class="reserva-card"><p style="margin:0;opacity:0.9;font-size:14px;">PATRIMÔNIO REAL</p><h2 style="margin:.4rem 0 0 0;">R$ {balanco:,.2f}</h2></div>',
@@ -604,7 +739,7 @@ with aba_reserva:
 
     st.markdown("### 📄 Relatórios")
 
-    # >>> Recalcula o DF no momento do download (evita staleness)
+    # Recalcula o DF no momento do download (evita staleness)
     if not st.session_state.dados.empty:
         df_para_relatorio = st.session_state.dados.copy()
         df_para_relatorio['data'] = pd.to_datetime(df_para_relatorio['data'], errors='coerce')
@@ -615,7 +750,6 @@ with aba_reserva:
         df_para_relatorio = df_para_relatorio[mask].copy()
         df_para_relatorio = df_para_relatorio.sort_values(by=['data', 'descricao'], na_position='last')
 
-        # Debug: quantas linhas vão?
         st.caption(f"🧾 Lançamentos no relatório: **{len(df_para_relatorio)}**")
 
         if not df_para_relatorio.empty:
@@ -639,6 +773,9 @@ with aba_reserva:
     else:
         st.caption("Sem dados para gerar relatórios.")
 
+# ============================
+# ABA: SONHOS
+# ============================
 with aba_sonhos:
     st.markdown("### 🎯 Calculadora de Sonhos")
     st.info("💡 Exemplo: 'Viagem de Férias' ou 'Troca de Carro'.")
@@ -651,7 +788,9 @@ with aba_sonhos:
             if sobra_m > 0:
                 m_f = int(v_sonho / sobra_m) + 1
                 st.info(f"Faltam aprox. **{m_f} meses**.")
-                st.progress(min(max(balanco/v_sonho, 0.0), 1.0))
+                # Progresso com base no patrimônio atual vs objetivo
+                progresso = min(max((balanco / v_sonho) if v_sonho > 0 else 0.0, 0.0), 1.0)
+                st.progress(progresso)
             else:
                 st.warning("Economize este mês para alimentar seu sonho!")
         except Exception:
