@@ -7,30 +7,92 @@ import io
 import streamlit.components.v1 as components
 
 
-# --- BOOTSTRAP: rodar uma vez para criar a usuária "alynne" ---
-import os, hashlib, base64
-from supabase import create_client
 
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+# ============================
+# AUTENTICAÇÃO (Login via 'email' + PBKDF2)
+# ============================
+import os, base64, hashlib
 
 def pbkdf2_hash(password: str, iterations: int = 260000) -> str:
-    salt = os.urandom(16)  # 128 bits de salt
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
-    salt_b64 = base64.b64encode(salt).decode()
-    hash_b64 = base64.b64encode(dk).decode()
-    return f"pbkdf2_sha256${iterations}${salt_b64}${hash_b64}"
+    salt = os.urandom(16)  # 128 bits
+    dk   = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return f"pbkdf2_sha256${iterations}$" \
+           f"{base64.b64encode(salt).decode()}$" \
+           f"{base64.b64encode(dk).decode()}"
 
-password_hash = pbkdf2_hash("862721*")
+def pbkdf2_verify(password: str, stored: str) -> bool:
+    try:
+        algo, iter_s, salt_b64, hash_b64 = stored.split("$", 3)
+        if algo != "pbkdf2_sha256":
+            return False
+        iterations = int(iter_s)
+        salt = base64.b64decode(salt_b64.encode())
+        expected = base64.b64decode(hash_b64.encode())
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+        return hashlib.compare_digest(dk, expected)
+    except Exception:
+        return False
 
-# upsert para criar/atualizar a usuária
-sb.table("app_users").upsert({
-    "username": "alynne",
-    "password_hash": password_hash
-}).execute()
+# --- BOOTSTRAP: marque True uma única vez para criar/atualizar a 'alynne', depois volte para False ---
+RUN_BOOTSTRAP = False
 
-st.success("Usuária 'alynne' criada/atualizada no banco com hash seguro.")
+if RUN_BOOTSTRAP:
+    try:
+        senha_hash = pbkdf2_hash("862721*")
+        supabase.table("usuarios").upsert(
+            {"email": "alynne", "password_hash": senha_hash, "nome": "Alynne"},
+            on_conflict="email"   # funciona por causa do índice único
+        ).execute()
+        st.success("Usuária 'alynne' criada/atualizada com hash seguro.")
+    except Exception as e:
+        st.error(f"Falha no bootstrap de usuário: {e}")
+
+def fetch_user_by_email(email_login: str):
+    try:
+        res = supabase.table("usuarios") \
+            .select("user_id, email, nome, password_hash") \
+            .eq("email", email_login) \
+            .limit(1).execute()
+        return res.data[0] if res.data else None
+    except Exception:
+        return None
+
+def login_view():
+    st.markdown("### 🔐 Login")
+    with st.form("login_form", clear_on_submit=False):
+        u = st.text_input("Usuário (e-mail/login)", value="", autocomplete="username",
+                          placeholder="alynne")
+        p = st.text_input("Senha", value="", type="password", autocomplete="current-password",
+                          placeholder="••••••••")
+        ok = st.form_submit_button("Entrar")
+
+    if ok:
+        user = fetch_user_by_email(u.strip())
+        if user and user.get("password_hash") and pbkdf2_verify(p, user["password_hash"]):
+            st.session_state["auth_user"] = {
+                "id": user["user_id"],
+                "username": user["email"],
+                "nome": user.get("nome") or user["email"]
+            }
+            st.success(f"Bem-vinda, {st.session_state['auth_user']['nome']}! ✅")
+            st.rerun()
+        else:
+            st.error("Usuário ou senha inválidos.")
+
+# Gate: se não logado, mostra login e interrompe o resto do app
+if "auth_user" not in st.session_state:
+    login_view()
+    st.stop()
+
+# Sidebar: logout
+with st.sidebar:
+    st.caption(f"Conectado como **{st.session_state['auth_user']['nome']}**")
+    if st.button("Sair"):
+        # Limpa o estado (preserve segredos se quiser)
+        for k in list(st.session_state.keys()):
+            if k not in ("SUPABASE_URL", "SUPABASE_KEY"):
+                del st.session_state[k]
+        st.rerun()
 
 #DELETAR AQUI PARA CIMA
 
