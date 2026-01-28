@@ -2,9 +2,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-import plotly.express as px  # (mantido se quiser usar gráficos depois)
 from supabase import create_client, Client
-import os
 import io
 from fpdf import FPDF
 import streamlit.components.v1 as components
@@ -79,24 +77,24 @@ def inject_head_for_ios():
 inject_head_for_ios()
 
 # =========================================================
-# CSS ALTO CONTRASTE (iOS-friendly): safe-area, inputs 16px,
-# botões maiores, hierarquia visual e Dark Mode opcional
+# CSS MID-CONTRAST (claro por padrão) + Dark Mode moderado
+# Corrige: pouca legibilidade no claro + overlap do ícone
 # =========================================================
 st.markdown("""
 <style>
-/* ============= CORES BASE (ALTO CONTRASTE) ============= */
+/* ========= PALETA MID-CONTRAST (claro por padrão) ========= */
 :root{
-  --bg:#EEF2F6;        /* Fundo levemente mais escuro que branco */
-  --text:#0B1220;      /* Texto principal mais escuro */
-  --muted:#334155;     /* Texto secundário mais escuro */
-  --brand:#2563EB;
+  --bg:#F3F5F9;      /* cinza claro (não estoura como branco 100%) */
+  --text:#0A1628;    /* texto principal bem escuro */
+  --muted:#334155;   /* texto secundário */
+  --brand:#2563EB;   /* azul */
   --brand-600:#1D4ED8;
   --ok:#0EA5A4;
   --warn:#D97706;
   --danger:#DC2626;
-  --card:#FFFFFF;
-  --line:#CBD5E1;      /* borda perceptível */
-  --soft-line:#E2E8F0;
+  --card:#FFFFFF;    /* cards brancos */
+  --line:#D6DEE8;    /* borda nítida */
+  --soft-line:#E6ECF3;
 }
 
 html, body, [class*="css"] {
@@ -105,7 +103,7 @@ html, body, [class*="css"] {
 html, body { background: var(--bg); color: var(--text); -webkit-text-size-adjust: 100%; }
 .stApp { background: var(--bg); }
 
-/* Safe-area iOS (notch/gestos) */
+/* Safe-area iOS */
 @supports(padding: max(0px)) {
   .stApp, .block-container {
     padding-top: max(10px, env(safe-area-inset-top)) !important;
@@ -113,55 +111,38 @@ html, body { background: var(--bg); color: var(--text); -webkit-text-size-adjust
   }
 }
 
-/* Inputs >= 16px => evita zoom automático no iOS */
+/* Inputs >= 16px => sem zoom no iOS, mais contraste */
 input, select, textarea,
 .stTextInput input, .stNumberInput input, .stDateInput input,
 .stSelectbox div[data-baseweb="select"] {
   font-size: 16px !important; color: var(--text) !important;
 }
-
-/* Widgets com fundo branco, borda visível e texto escuro */
 .stTextInput input, .stNumberInput input, .stDateInput input {
   background: var(--card) !important;
   border: 1px solid var(--line) !important;
   border-radius: 12px !important;
-  color: var(--text) !important;
 }
 .stSelectbox > div[data-baseweb="select"]{
   background: var(--card) !important;
   border: 1px solid var(--line) !important;
   border-radius: 12px !important;
-  color: var(--text) !important;
 }
-.stSelectbox [data-baseweb="select"] div { color: var(--text) !important; }
-
-/* Labels com contraste */
-legend, label, .stRadio label, .stSelectbox label, .stDateInput label,
-.stNumberInput label, .stTextInput label {
-  color: var(--muted) !important; font-weight: 700 !important;
-}
-
-/* Placeholders e ícones dos inputs com mais contraste */
 ::placeholder { color: #475569 !important; opacity: 1 !important; }
-.stDateInput input::placeholder { color: #475569 !important; }
 .stSelectbox svg, .stNumberInput svg { color: #1F2937 !important; opacity: 1 !important; }
 
-/* Evita highlight azul ao toque no iOS */
-* { -webkit-tap-highlight-color: transparent; }
-
 /* Cabeçalho */
-.header-container { text-align: center; padding: 0 10px 18px 10px; }
+.header-container { text-align: center; padding: 0 10px 16px 10px; }
 .main-title {
   background: linear-gradient(90deg, #1E293B, var(--brand));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  font-weight: 800; font-size: 2rem; margin: 0;
+  font-weight: 800; font-size: 1.9rem; margin: 0;
 }
 .slogan { color: var(--muted); font-size: .95rem; font-weight: 600; }
 
-/* Abas com contraste maior */
+/* Abas (claras com contraste) */
 .stTabs [data-baseweb="tab-list"]{
   display:flex; gap:6px; width:100%;
-  background:#E5EAF1; border:1px solid var(--line); border-radius:16px; padding:4px;
+  background:#E9EEF5; border:1px solid var(--line); border-radius:16px; padding:4px;
 }
 .stTabs [data-baseweb="tab"]{
   flex:1 1 auto; text-align:center; background:transparent; border-radius:12px;
@@ -170,69 +151,85 @@ legend, label, .stRadio label, .stSelectbox label, .stDateInput label,
 }
 .stTabs [aria-selected="true"]{
   background: var(--card) !important; color: var(--brand) !important;
-  box-shadow: 0 2px 6px rgba(0,0,0,.08);
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
   border:1px solid var(--line);
 }
 
-/* Métricas: força cor/opacidade dos textos */
+/* Métricas (legíveis no claro) */
 [data-testid="stMetric"]{
   background: var(--card);
   border-radius: 14px; padding: 14px;
   border: 1px solid var(--line);
-  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  box-shadow: 0 1px 6px rgba(0,0,0,.05);
   color: var(--text);
 }
 [data-testid="stMetric"] * { opacity: 1 !important; color: var(--text) !important; }
 [data-testid="stMetricLabel"] { color: #0F172A !important; font-weight: 800 !important; }
-[data-testid="stMetricValue"] { color: #0B1220 !important; font-weight: 900 !important; }
+[data-testid="stMetricValue"] { color: #0A1628 !important; font-weight: 900 !important; }
 
 /* Botões */
 .stButton>button{
-  width:100%; min-height:48px; border-radius:14px; background: var(--brand);
-  color:#fff; border:1px solid #1E40AF; padding:12px 14px; font-weight:900; letter-spacing:.2px;
-  box-shadow: 0 2px 10px rgba(29,78,216,.25);
+  width:100%; min-height:46px; border-radius:12px; background: var(--brand);
+  color:#fff; border:1px solid #1E40AF; padding:10px 14px; font-weight:800; letter-spacing:.2px;
+  box-shadow: 0 1px 8px rgba(29,78,216,.18);
   transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
 }
 .stButton>button:active{ transform: scale(.98); }
 .stButton>button:hover{ background: var(--brand-600); }
 
-/* Botão Excluir */
+/* Botão Excluir (texto, sem “pill” azul) */
 .btn-excluir > div > button{
   background: transparent !important; color: var(--danger) !important;
   border: none !important; font-size: 14px !important; font-weight: 800 !important;
-  min-height: 44px !important;
+  min-height: 42px !important; box-shadow:none !important;
 }
 
-/* Cards de transação: texto forte e borda visível */
+/* ===== Cards de transação — correção do overlap ===== */
 .transaction-card{
-  background: var(--card); padding: 14px; border-radius: 14px;
-  margin-bottom: 8px; display:flex; justify-content:space-between; gap:12px;
-  align-items:center; border:1px solid var(--line);
-  box-shadow: 0 2px 8px rgba(0,0,0,.05); color: var(--text);
+  background: var(--card); padding: 12px; border-radius: 14px;
+  margin-bottom: 10px; display:flex; justify-content:space-between; gap:12px;
+  align-items:flex-start; border:1px solid var(--line);
+  box-shadow: 0 1px 6px rgba(0,0,0,.05); color: var(--text);
 }
-.transaction-card *{ opacity:1 !important; }
+.transaction-left{
+  display:flex; align-items:flex-start; gap:12px; min-width:0;
+}
 .card-icon{
-  background: #E8EEF6; width: 44px; height: 44px; border-radius: 10px;
+  background: #EBF1FA; width: 42px; height: 42px; border-radius: 10px;
   display:flex; align-items:center; justify-content:center; font-size: 20px; color:#0F172A;
+  flex:0 0 42px;
 }
-
-/* Badges de status com contraste */
+.tc-info{
+  display:flex; flex-direction:column; gap:4px; min-width:0; /* evita quebra por cima */
+}
+.tc-title{
+  font-weight: 700; color: #0A1628; line-height: 1.15; word-break: break-word;
+}
+.tc-meta{
+  font-size: 12px; color: #334155; line-height: 1.1;
+}
 .status-badge{
   font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 900;
-  text-transform: uppercase; margin-top: 6px; display:inline-block; letter-spacing:.2px;
+  text-transform: uppercase; display:inline-block; letter-spacing:.2px; width: fit-content;
 }
 .status-badge.pago{ background:#DCFCE7; color:#065F46; border:1px solid #86EFAC; }
 .status-badge.pendente{ background:#FEF3C7; color:#92400E; border:1px solid #FCD34D; }
 .status-badge.negociacao{ background:#DBEAFE; color:#1E3A8A; border:1px solid #93C5FD; }
 
+.transaction-right{
+  color:#0A1628; font-weight: 800; white-space: nowrap; margin-left:auto;
+}
+.transaction-right.entrada{ color:#0EA5A4; }
+.transaction-right.saida{ color:#DC2626; }
+
 /* Vencimento visível */
 .vencimento-alerta { color: #B91C1C; font-size: 12px; font-weight: 800; }
 
-/* Card Patrimônio com contraste */
+/* Card Patrimônio (claro) */
 .reserva-card{
-  background: linear-gradient(135deg, #0B1220 0%, #1F2937 100%);
-  color: #F8FAFC; padding: 22px; border-radius: 16px; text-align: center;
-  box-shadow: 0 8px 18px rgba(0,0,0,.25); border:1px solid #111827;
+  background: linear-gradient(135deg, #F8FAFF 0%, #E9EEF7 100%);
+  color: #0A1628; padding: 18px; border-radius: 14px; text-align: center;
+  box-shadow: 0 1px 8px rgba(0,0,0,.06); border:1px solid var(--line);
 }
 
 /* Expanders */
@@ -244,31 +241,32 @@ legend, label, .stRadio label, .stSelectbox label, .stDateInput label,
 /* Colunas no iPhone */
 @media (max-width: 480px){
   [data-testid="column"]{ width:100% !important; flex:1 1 100% !important; }
-  .main-title{ font-size:1.7rem; }
+  .main-title{ font-size:1.65rem; }
 }
 
 /* Remover itens padrão do Streamlit */
 #MainMenu, footer, header{ visibility: hidden; }
-.block-container{ padding-top: 1.0rem !important; }
+.block-container{ padding-top: 0.9rem !important; }
 
-/* ======== DARK MODE (opcional, segue sistema do iPhone) ======== */
+/* ========= DARK MODE autom. (mais claro que o anterior) ========= */
 @media (prefers-color-scheme: dark){
   :root{
-    --bg:#0B1220; --text:#E8EDF5; --muted:#C7D2FE;
-    --card:#111827; --line:#243047; --soft-line:#1F2937;
-    --brand:#60A5FA; --brand-600:#3B82F6;
+    --bg:#0F172A; --text:#E7EEF8; --muted:#C8D4EE;
+    --card:#141C2F; --line:#24324A; --soft-line:#1F2A3E;
+    --brand:#7AA7FF; --brand-600:#5E90FF;
     --ok:#34D399; --warn:#FBBF24; --danger:#F87171;
   }
   html, body { background: var(--bg); color: var(--text); }
   .stApp, .block-container { background: var(--bg); }
-  .stTabs [data-baseweb="tab-list"]{ background:#0F172A; border-color:#1F2937; }
-  .stTabs [aria-selected="true"]{ border-color:#334155; }
+  .stTabs [data-baseweb="tab-list"]{ background:#18223A; border-color:#25314A; }
+  .stTabs [aria-selected="true"]{ border-color:#2E3C59; box-shadow: 0 1px 6px rgba(0,0,0,.35); }
+
   .transaction-card, [data-testid="stMetric"], [data-testid="stExpander"] > details{
-    background: var(--card); border-color:#334155; box-shadow: 0 1px 8px rgba(0,0,0,.35);
+    background: var(--card); border-color:#2A3952; box-shadow: 0 1px 10px rgba(0,0,0,.32);
   }
-  .card-icon{ background:#1F2937; color:#E5E7EB; }
-  .slogan{ color:#94A3B8; }
-  ::placeholder{ color:#94A3B8 !important; }
+  .card-icon{ background:#223049; color:#E5E7EB; }
+  .slogan{ color:#B8C3D9; }
+  ::placeholder{ color:#A8B5CC !important; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -441,17 +439,18 @@ with aba_resumo:
 
         st.markdown("### Histórico")
         for idx, row in df_mes.sort_values(by='data', ascending=False).iterrows():
-            cor = "#10B981" if row['tipo'] == "Entrada" else "#EF4444"
+            # Classes/cores para valor
+            valor_class = "entrada" if row['tipo'] == "Entrada" else "saida"
             icon = row['categoria'].split()[0] if " " in row['categoria'] else "💸"
             s_text = row.get('status', 'Pago')
 
-            # Definição de classe/cores do badge (alto contraste)
+            # Classe do badge
             if s_text == "Pago":
-                s_class = "pago"; s_color, s_bg = "#065F46", "#DCFCE7"
+                s_class = "pago"
             elif s_text == "Pendente":
-                s_class = "pendente"; s_color, s_bg = "#92400E", "#FEF3C7"
+                s_class = "pendente"
             else:
-                s_class = "negociacao"; s_color, s_bg = "#1E3A8A", "#DBEAFE"  # Em Negociação
+                s_class = "negociacao"
 
             # Vencimento
             txt_venc = ""
@@ -462,18 +461,19 @@ with aba_resumo:
                 elif dias_diff == 0:
                     txt_venc = f" <span class='vencimento-alerta' style='color:#D97706'>Vence Hoje!</span>"
 
+            # ---- CARD DE TRANSAÇÃO (layout corrigido) ----
             st.markdown(f"""
-                <div class="transaction-card">
-                    <div style="display: flex; align-items: center;">
-                        <div class="card-icon">{icon}</div>
-                        <div>
-                            <div style="font-weight: 700; color: #0B1220;">{row["descricao"]}</div>
-                            <div style="font-size: 12px; color: #334155;">{row["data"].strftime('%d %b')}{txt_venc}</div>
-                            <div class="status-badge {s_class}">{s_text}</div>
-                        </div>
-                    </div>
-                    <div style="color: {cor}; font-weight: 800;">R$ {row["valor"]:,.2f}</div>
+              <div class="transaction-card">
+                <div class="transaction-left">
+                  <div class="card-icon">{icon}</div>
+                  <div class="tc-info">
+                    <div class="tc-title">{row["descricao"]}</div>
+                    <div class="tc-meta">{row["data"].strftime('%d %b')}{txt_venc}</div>
+                    <div class="status-badge {s_class}">{s_text}</div>
+                  </div>
                 </div>
+                <div class="transaction-right {valor_class}">R$ {row["valor"]:,.2f}</div>
+              </div>
             """, unsafe_allow_html=True)
 
             cp, cd = st.columns([1, 1])
