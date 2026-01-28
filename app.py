@@ -1,31 +1,33 @@
-# app.py  — Utilitário temporário para gerar salt/hash (PBKDF2-SHA256)
-# Depois de usar e inserir no Supabase, remova este arquivo ou o bloco 'main()'
+# app.py — Utilitário temporário para gerar salt/hash (PBKDF2-SHA256)
+# Use apenas para gerar o SQL do usuário admin no Supabase e depois remova.
 
 import binascii
 import hashlib
 import secrets
 import streamlit as st
 
-# Configuração básica da página (evita glitches em alguns ambientes)
+# 1) Config de página ANTES de qualquer componente
 st.set_page_config(page_title="Gerar Hash Admin", page_icon="🔑", layout="centered")
 
 def main():
     st.title("🔐 Gerar salt/hash (PBKDF2-SHA256) para o Supabase")
-    st.caption("Use este utilitário TEMPORARIAMENTE. Após gerar e inserir no banco, remova-o por segurança.")
+    st.caption("Use TEMPORARIAMENTE. Após gerar e inserir no banco, remova este utilitário.")
 
     with st.expander("🛠️ Abrir utilitário"):
         user = st.text_input("Usuário (ex.: alynne)", value="")
         pwd  = st.text_input("Senha (não será salva)", type="password", value="")
-        iters = st.number_input("Iterações PBKDF2", min_value=100_000, max_value=1_000_000,
-                                value=200_000, step=50_000,
-                                help="200k é um bom equilíbrio entre segurança e desempenho.")
+        iters = st.number_input(
+            "Iterações PBKDF2",
+            min_value=100_000, max_value=1_000_000, value=200_000, step=50_000,
+            help="200k é um bom equilíbrio entre segurança e desempenho."
+        )
 
         if st.button("Gerar salt/hash agora", type="primary"):
             if not user or not pwd:
                 st.warning("Informe usuário e senha para gerar o hash.")
             else:
-                # Gera salt e hash PBKDF2-SHA256
-                salt = secrets.token_bytes(16)
+                # 2) Gera salt e hash PBKDF2-SHA256
+                salt = secrets.token_bytes(16)  # 16 bytes
                 dk   = hashlib.pbkdf2_hmac("sha256", pwd.encode("utf-8"), salt, int(iters))
                 salt_hex = binascii.hexlify(salt).decode()
                 hash_hex = binascii.hexlify(dk).decode()
@@ -40,11 +42,7 @@ on conflict (username) do update set
   is_admin = excluded.is_admin;""",
                     language="sql"
                 )
-
-                st.info(
-                    "Depois de executar o INSERT no Supabase, volte ao seu app original e "
-                    "REMOVA este utilitário por segurança."
-                )
+                st.info("Depois de executar o INSERT no Supabase, remova este utilitário do app.")
 
 if __name__ == "__main__":
     main()
