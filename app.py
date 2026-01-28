@@ -25,21 +25,21 @@ except Exception as e:
     st.error("Erro ao conectar ao banco de dados. Verifique os Secrets.")
     st.stop()
 
-import bcrypt
-senha = "A862721*".encode('utf-8')
-hash_gerado = bcrypt.hashpw(senha, bcrypt.gensalt())
-print(hash_gerado.decode('utf-8'))
-
 # ============================
 # SISTEMA DE LOGIN
 # ============================
 
 def login():
     st.markdown('<div class="header-container"><div class="main-title">🔐 Acesso Restrito</div></div>', unsafe_allow_html=True)
-    
+        
     with st.container():
         user_input = st.text_input("Usuário")
         pass_input = st.text_input("Senha", type="password")
+
+        import bcrypt
+        senha = "A862721*".encode('utf-8')
+        hash_gerado = bcrypt.hashpw(senha, bcrypt.gensalt())
+        print(hash_gerado.decode('utf-8'))
         
         if st.button("Entrar"):
             # Este bloco abaixo PRECISA estar recuado (4 espaços)
