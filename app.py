@@ -14,22 +14,6 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 
-import bcrypt
-import streamlit as st
-
-# --- BLOCO TEMPORÁRIO PARA GERAR SEU HASH ---
-st.title("Gerador de Senha Segura")
-senha_teste = "A862721*"
-if st.button("Gerar Hash Agora"):
-    # Gera o hash usando bcrypt
-    senha_bytes = senha_teste.encode('utf-8')
-    hash_gerado = bcrypt.hashpw(senha_bytes, bcrypt.gensalt())
-    
-    # Exibe na tela para você copiar
-    st.success("Hash gerado com sucesso! Copie o código abaixo:")
-    st.code(hash_gerado.decode('utf-8'))
-    st.warning("Após copiar e salvar no banco, delete este bloco de código do seu arquivo.")
-
 # ============================
 # CONFIGURAÇÃO SUPABASE
 # ============================
