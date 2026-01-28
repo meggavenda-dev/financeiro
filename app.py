@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 
 
 
-x) + Funções PBKDF2
+
 # ============================
 import os, base64, hashlib
 
