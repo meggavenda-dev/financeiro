@@ -1,28 +1,50 @@
+# app.py  — Utilitário temporário para gerar salt/hash (PBKDF2-SHA256)
+# Depois de usar e inserir no Supabase, remova este arquivo ou o bloco 'main()'
+
+import binascii
+import hashlib
+import secrets
 import streamlit as st
 
-# --- UTILITÁRIO TEMPORÁRIO: Gerar salt/hash PBKDF2 no próprio app ---
-# Remova este bloco depois de fazer o INSERT no Supabase.
-import binascii, hashlib, secrets
+# Configuração básica da página (evita glitches em alguns ambientes)
+st.set_page_config(page_title="Gerar Hash Admin", page_icon="🔑", layout="centered")
 
-with st.expander("🛠️ Utilitário temporário: Gerar salt/hash PBKDF2 (remova após uso)"):
-    pwd = st.text_input("Digite a senha para gerar hash (não será salva)", type="password")
-    user = st.text_input("Digite o usuário (ex.: alynne)", value="")
-    if st.button("Gerar salt/hash"):
-        if pwd and user:
-            salt = secrets.token_bytes(16)
-            dk   = hashlib.pbkdf2_hmac("sha256", pwd.encode("utf-8"), salt, 200_000)
-            salt_hex = binascii.hexlify(salt).decode()
-            hash_hex = binascii.hexlify(dk).decode()
-            st.success("Gerado com sucesso! Use o SQL abaixo no Supabase:")
-            st.code(
+def main():
+    st.title("🔐 Gerar salt/hash (PBKDF2-SHA256) para o Supabase")
+    st.caption("Use este utilitário TEMPORARIAMENTE. Após gerar e inserir no banco, remova-o por segurança.")
+
+    with st.expander("🛠️ Abrir utilitário"):
+        user = st.text_input("Usuário (ex.: alynne)", value="")
+        pwd  = st.text_input("Senha (não será salva)", type="password", value="")
+        iters = st.number_input("Iterações PBKDF2", min_value=100_000, max_value=1_000_000,
+                                value=200_000, step=50_000,
+                                help="200k é um bom equilíbrio entre segurança e desempenho.")
+
+        if st.button("Gerar salt/hash agora", type="primary"):
+            if not user or not pwd:
+                st.warning("Informe usuário e senha para gerar o hash.")
+            else:
+                # Gera salt e hash PBKDF2-SHA256
+                salt = secrets.token_bytes(16)
+                dk   = hashlib.pbkdf2_hmac("sha256", pwd.encode("utf-8"), salt, int(iters))
+                salt_hex = binascii.hexlify(salt).decode()
+                hash_hex = binascii.hexlify(dk).decode()
+
+                st.success("Gerado com sucesso! Copie e execute o SQL no Supabase:")
+                st.code(
 f"""insert into public.app_users (username, pwd_salt, pwd_hash, is_admin)
 values ('{user}', '{salt_hex}', '{hash_hex}', true)
 on conflict (username) do update set
   pwd_salt = excluded.pwd_salt,
   pwd_hash = excluded.pwd_hash,
   is_admin = excluded.is_admin;""",
-                language="sql"
-            )
-            st.info("Depois de executar o INSERT no Supabase, REMOVA este bloco do app.py por segurança.")
-        else:
-            st.warning("Informe usuário e senha para gerar o hash.")
+                    language="sql"
+                )
+
+                st.info(
+                    "Depois de executar o INSERT no Supabase, volte ao seu app original e "
+                    "REMOVA este utilitário por segurança."
+                )
+
+if __name__ == "__main__":
+    main()
