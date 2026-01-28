@@ -6,17 +6,64 @@ from supabase import create_client, Client
 import io
 import streamlit.components.v1 as components
 
-
-
-
-#DELETAR AQUI PARA CIMA
-
 # === NOVO: ReportLab para gerar PDF robusto (cabeçalho + paginação) ===
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
+
+# ============================
+# CONFIGURAÇÃO SUPABASE
+# ============================
+try:
+    url: str = st.secrets["SUPABASE_URL"]
+    key: str = st.secrets["SUPABASE_KEY"]
+    supabase: Client = create_client(url, key)
+except Exception as e:
+    st.error("Erro ao conectar ao banco de dados. Verifique os Secrets.")
+    st.stop()
+
+# ============================
+# SISTEMA DE LOGIN
+# ============================
+
+def login():
+    st.markdown('<div class="header-container"><div class="main-title">🔐 Acesso Restrito</div></div>', unsafe_allow_html=True)
+    
+    with st.container():
+        user_input = st.text_input("Usuário")
+        pass_input = st.text_input("Senha", type="password")
+        
+        if st.button("Entrar"):
+            # Busca o usuário pelo nome
+            res = supabase.table("usuarios").select("nome, password_hash").eq("nome", user_input).execute()
+            
+            if res.data:
+                stored_hash = res.data[0]['password_hash']
+                # Verifica se a senha digitada corresponde ao hash no banco
+                if bcrypt.checkpw(pass_input.encode('utf-8'), stored_hash.encode('utf-8')):
+                    st.session_state.logged_in = True
+                    st.session_state.user_name = res.data[0]['nome']
+                    st.success("Login realizado!")
+                    st.rerun()
+                else:
+                    st.error("Senha incorreta.")
+            else:
+                st.error("Usuário não encontrado.")
+
+# Controle de sessão
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    login()
+    st.stop()
+
+# Se chegou aqui, o usuário está logado. Botão de Logout opcional:
+if st.sidebar.button("Sair"):
+    st.session_state.logged_in = False
+    st.rerun()
 
 # ================================
 # CONFIGURAÇÃO DA PÁGINA (MOBILE)
